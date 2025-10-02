@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { customClaimsService } from './customClaimsService';
 
 export interface AdminUser {
   uid: string;
@@ -68,14 +69,25 @@ class FirebaseAuthService {
         throw new Error('No user returned from authentication');
       }
 
-      // Get admin user data from Firestore
-      const adminUser = await this.getAdminUserData(user.uid);
-      
       console.log('✅ [ADMIN] Firebase authentication successful');
+      
+      // Create basic admin user object - let backend handle the full user data
+      const basicAdminUser: AdminUser = {
+        uid: user.uid,
+        id: user.uid,
+        email: user.email!,
+        name: user.displayName || 'Admin User',
+        displayName: user.displayName || 'Admin User',
+        role: 'super_admin',
+        permissions: ['all'],
+        lastLogin: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        isEmailVerified: user.emailVerified
+      };
       
       return {
         success: true,
-        user: adminUser
+        user: basicAdminUser
       };
 
     } catch (error: any) {
@@ -211,6 +223,9 @@ class FirebaseAuthService {
   async signOut(): Promise<void> {
     try {
       console.log('👋 [ADMIN] Signing out user...');
+      
+      // Clear custom claims cache
+      customClaimsService.clearClaims();
       
       await signOut(auth);
       this.clearUserData();

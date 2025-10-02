@@ -72,8 +72,9 @@ const Analytics: React.FC = () => {
         metrics: ['drivers', 'bookings', 'revenue']
       }))
       setError(null)
-    } catch (err) {
-      setError('Failed to refresh analytics data')
+    } catch (err: any) {
+      console.error('Analytics refresh error:', err)
+      setError(err.message || 'Failed to refresh analytics data')
     } finally {
       setRefreshing(false)
     }

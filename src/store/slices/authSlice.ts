@@ -247,6 +247,12 @@ const authSlice = createSlice({
           expiresAt,
           user: standardizedUser
         })
+        
+        // IMPORTANT: Set the backend JWT token in apiService
+        import('../../services/apiService').then(({ apiService }) => {
+          apiService.setToken(action.payload.token, true)
+          console.log('✅ [AUTH] Backend JWT token set in apiService')
+        })
       })
       .addCase(loginAdmin.rejected, (state, action) => {
         state.loading = false

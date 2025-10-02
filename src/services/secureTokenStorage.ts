@@ -8,6 +8,7 @@ interface TokenData {
   refreshToken?: string;
   expiresAt: number;
   user: any;
+  isBackendToken?: boolean;
 }
 
 class SecureTokenStorage {

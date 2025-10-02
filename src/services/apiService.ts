@@ -28,8 +28,14 @@ class ApiService {
     }
   }
 
-  async setToken(token: string) {
+  async setToken(token: string, isBackendToken: boolean = false) {
     this.token = token
+    console.log('🔑 [API] Token set:', { 
+      tokenLength: token.length, 
+      isBackendToken,
+      tokenPreview: token.substring(0, 20) + '...'
+    })
+    
     // Update secure storage if user data exists
     try {
       const user = await secureTokenStorage.getCurrentUser()
@@ -38,11 +44,13 @@ class ApiService {
         await secureTokenStorage.setTokenData({
           token,
           expiresAt,
-          user
+          user,
+          isBackendToken
         })
+        console.log('✅ [API] Token stored in secure storage')
       }
     } catch (error) {
-      console.error('Failed to update token in secure storage:', error)
+      console.error('❌ [API] Failed to update token in secure storage:', error)
     }
   }
 
@@ -99,6 +107,17 @@ class ApiService {
              signal: controller.signal,
              ...options,
            }
+           
+           // Log token status for debugging
+           if (this.token) {
+             console.log('🔑 [API] Making request with token:', {
+               endpoint,
+               tokenLength: this.token.length,
+               tokenPreview: this.token.substring(0, 20) + '...'
+             })
+           } else {
+             console.log('⚠️ [API] Making request without token:', endpoint)
+           }
 
            try {
              const response = await fetch(url, config)
@@ -108,15 +127,20 @@ class ApiService {
              if (!response.ok) {
                // Handle token expiration more gracefully
                if (response.status === 401 && !isRetry) {
-                 console.log('🔄 Token expired, attempting refresh...')
+                 console.log('🔄 [API] Token expired, attempting refresh...')
                  try {
-                   await this.refreshToken()
-                   // Retry the request with new token
-                   return this.request<T>(endpoint, options, true)
+                   const newToken = await this.refreshToken()
+                   if (newToken) {
+                     console.log('✅ [API] Token refreshed, retrying request...')
+                     // Retry the request with new token
+                     return this.request<T>(endpoint, options, true)
+                   } else {
+                     throw new Error('Token refresh returned null')
+                   }
                  } catch (refreshError) {
-                   console.error('❌ Token refresh failed:', refreshError)
-                   // Don't redirect immediately - let the app handle it gracefully
-                   console.log('⚠️ Authentication failed, app will handle redirect')
+                   console.error('❌ [API] Token refresh failed:', refreshError)
+                   // Clear invalid token
+                   this.clearToken()
                    throw new Error('Authentication failed. Please login again.')
                  }
                }
@@ -171,25 +195,44 @@ class ApiService {
 
   private async performTokenRefresh(): Promise<string | null> {
     try {
-      // Check if token needs refresh
-      const needsRefresh = await secureTokenStorage.needsRefresh()
-      if (!needsRefresh) {
-        return null
-      }
-
+      console.log('🔄 [API] Starting token refresh process...')
+      
       // Get fresh Firebase ID token
       const { firebaseAuthService } = await import('./firebaseAuthService')
-      const newToken = await firebaseAuthService.getIdToken(true)
+      const firebaseToken = await firebaseAuthService.getIdToken(true)
       
-      if (newToken) {
-        await this.setToken(newToken)
-        console.log('✅ Firebase token refreshed successfully')
-        return newToken
-      } else {
+      if (!firebaseToken) {
         throw new Error('Failed to get fresh Firebase token')
       }
+
+      console.log('🔄 [API] Got fresh Firebase token, exchanging for backend JWT...')
+      
+      // Exchange Firebase token for backend JWT
+      const backendResponse = await fetch(`${this.baseURL}/api/admin/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ idToken: firebaseToken })
+      })
+
+      if (!backendResponse.ok) {
+        const errorData = await backendResponse.json()
+        throw new Error(`Backend token exchange failed: ${errorData.error?.message || backendResponse.statusText}`)
+      }
+
+      const backendData = await backendResponse.json()
+      const backendJWT = backendData.data?.token
+      
+      if (!backendJWT) {
+        throw new Error('No backend JWT received from exchange')
+      }
+
+      await this.setToken(backendJWT, true)
+      console.log('✅ [API] Backend JWT refreshed successfully')
+      return backendJWT
     } catch (error) {
-      console.error('❌ Firebase token refresh error:', error)
+      console.error('❌ [API] Token refresh error:', error)
       throw error
     }
   }

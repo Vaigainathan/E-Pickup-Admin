@@ -195,6 +195,41 @@ class ComprehensiveAdminService {
     }
   }
 
+  // Sync driver verification status
+  async syncDriverStatus(driverId: string): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log(`🔄 Syncing verification status for driver: ${driverId}`)
+      const response = await apiService.post(`/api/admin/drivers/${driverId}/sync-status`)
+      
+      if (response.success) {
+        console.log('✅ Driver verification status synced successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Driver verification status synced successfully'
+        }
+      } else {
+        console.error('❌ Failed to sync driver status:', response.error)
+        return {
+          success: false,
+          error: {
+            code: 'SYNC_STATUS_ERROR',
+            message: 'Failed to sync driver verification status'
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error syncing driver status:', error)
+      return {
+        success: false,
+        error: {
+          code: 'SYNC_STATUS_ERROR',
+          message: 'Failed to sync driver verification status'
+        }
+      }
+    }
+  }
+
   async getDrivers(page: number = 1, limit: number = 50): Promise<AdminServiceResponse<Driver[]>> {
     try {
       // Validate pagination parameters
@@ -540,42 +575,62 @@ class ComprehensiveAdminService {
       const bookings: Booking[] = []
       bookingsSnapshot.forEach(doc => {
         const data = doc.data()
+        
+        // Map the actual booking data structure to admin dashboard format
         bookings.push({
           id: doc.id,
           bookingId: data.bookingId || doc.id,
           customerId: data.customerId || '',
           driverId: data.driverId,
+          // Map customer info from the actual data structure
           customerInfo: {
-            name: data.customerInfo?.name || '',
-            phone: data.customerInfo?.phone || '',
+            name: data.pickup?.name || data.customerInfo?.name || 'Unknown Customer',
+            phone: data.pickup?.phone || data.customerInfo?.phone || '',
             email: data.customerInfo?.email || ''
           },
+          // Map sender and recipient contact information
+          senderInfo: {
+            name: data.pickup?.name || 'Sender',
+            phone: data.pickup?.phone || '+91 9876543210'
+          },
+          recipientInfo: {
+            name: data.dropoff?.name || 'Recipient',
+            phone: data.dropoff?.phone || '+91 9876543210'
+          },
+          // Map driver info if available
           driverInfo: data.driverId ? {
-            name: data.driverInfo?.name || '',
+            name: data.driverInfo?.name || 'Driver Assigned',
             phone: data.driverInfo?.phone || '',
             rating: data.driverInfo?.rating || 0
           } : undefined,
+          // Map pickup location from actual data structure
           pickupLocation: {
-            address: data.pickupLocation?.address || 'Unknown',
-            latitude: data.pickupLocation?.latitude || data.pickupLocation?.coordinates?.lat || 0,
-            longitude: data.pickupLocation?.longitude || data.pickupLocation?.coordinates?.lng || 0
+            address: data.pickup?.address || data.pickupLocation?.address || 'No pickup address',
+            latitude: data.pickup?.coordinates?.latitude || data.pickupLocation?.latitude || data.pickupLocation?.coordinates?.lat || 0,
+            longitude: data.pickup?.coordinates?.longitude || data.pickupLocation?.longitude || data.pickupLocation?.coordinates?.lng || 0
           },
+          // Map dropoff location from actual data structure
           dropoffLocation: {
-            address: data.dropoffLocation?.address || 'Unknown',
-            latitude: data.dropoffLocation?.latitude || data.dropoffLocation?.coordinates?.lat || 0,
-            longitude: data.dropoffLocation?.longitude || data.dropoffLocation?.coordinates?.lng || 0
+            address: data.dropoff?.address || data.dropoffLocation?.address || 'No dropoff address',
+            latitude: data.dropoff?.coordinates?.latitude || data.dropoffLocation?.latitude || data.dropoffLocation?.coordinates?.lat || 0,
+            longitude: data.dropoff?.coordinates?.longitude || data.dropoffLocation?.longitude || data.dropoffLocation?.coordinates?.lng || 0
           },
+          // Map package details from actual data structure
           packageDetails: {
-            weight: data.packageDetails?.weight || 0,
-            description: data.packageDetails?.description || '',
-            value: data.packageDetails?.value || 0
+            weight: data.package?.weight || data.packageDetails?.weight || 0,
+            description: data.package?.description || data.packageDetails?.description || '',
+            value: data.package?.value || data.packageDetails?.value || 0
           },
           status: data.status || 'pending',
-          fare: data.fare || {
+          // Map fare from actual data structure (enhanced fare calculation service structure)
+          fare: data.fare || data.pricing || {
             baseFare: 0,
             distanceFare: 0,
             totalFare: 0,
-            currency: 'INR'
+            currency: 'INR',
+            commission: 0,
+            driverNet: 0,
+            companyRevenue: 0
           },
           paymentStatus: data.paymentStatus || 'pending',
           estimatedDuration: data.estimatedDuration,
@@ -585,7 +640,7 @@ class ComprehensiveAdminService {
           updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           scheduledAt: data.scheduledAt?.toDate?.()?.toISOString(),
           completedAt: data.completedAt?.toDate?.()?.toISOString()
-        })
+        } as any)
       })
       
       console.log('✅ Bookings fetched from Firestore successfully')
@@ -891,6 +946,43 @@ class ComprehensiveAdminService {
         error: {
           code: 'FETCH_SYSTEM_ERROR',
           message: 'Failed to fetch system health'
+        }
+      }
+    }
+  }
+
+  // Revenue Summary
+  async getRevenueSummary(): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching revenue summary from backend...')
+      const response = await apiService.get('/api/admin/revenue/summary')
+      
+      if (response.success && response.data) {
+        console.log('✅ Revenue summary fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Revenue summary fetched successfully',
+          timestamp: new Date().toISOString()
+        }
+      }
+      
+      console.log('⚠️ Revenue API failed:', response.error?.message)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_ERROR',
+          message: response.error?.message || 'Failed to fetch revenue summary'
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Error fetching revenue summary:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_ERROR',
+          message: 'Failed to fetch revenue summary'
         }
       }
     }

@@ -107,6 +107,15 @@ interface Booking {
     value: number
   }
   paymentStatus?: string
+  // Contact information
+  senderInfo?: {
+    name: string
+    phone: string
+  }
+  recipientInfo?: {
+    name: string
+    phone: string
+  }
 }
 
 const ModernBookingManagement: React.FC = React.memo(() => {
@@ -144,6 +153,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
     customer: true,
     driver: true,
     pickup: true,
+    contact: true,
     status: true,
     payment: true,
     fare: true,
@@ -172,6 +182,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         customer: true,
         driver: false,
         pickup: false,
+        contact: true,
         status: true,
         payment: false,
         fare: true,
@@ -185,6 +196,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         customer: true,
         driver: true,
         pickup: false,
+        contact: true,
         status: true,
         payment: true,
         fare: true,
@@ -198,6 +210,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         customer: true,
         driver: true,
         pickup: true,
+        contact: true,
         status: true,
         payment: true,
         fare: true,
@@ -288,19 +301,43 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         // Normalize and validate booking data
         const normalizedBookings = bookingsData.map(booking => {
           try {
+            // Extract fare from the mapped data structure
+            let fareAmount = 0;
+            if (typeof booking.fare === 'number') {
+              fareAmount = booking.fare;
+            } else if (booking.fare && typeof booking.fare === 'object') {
+              // Handle the enhanced fare structure from fare calculation service
+              fareAmount = booking.fare.totalFare || booking.fare.baseFare || booking.fare.total || 0;
+            }
+            
+            // Extract customer name from customerInfo or fallback to pickup name
+            const customerName = booking.customerInfo?.name || booking.customerName || 'Unknown Customer';
+            
+            // Extract driver name from driverInfo or fallback
+            const driverName = booking.driverInfo?.name || booking.driverName || 'No Driver Assigned';
+            
             return {
               ...booking,
               id: booking.id || `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               status: booking.status || 'unknown',
-              fare: typeof booking.fare === 'number' ? booking.fare : 0,
-              customerName: booking.customerName || 'Unknown Customer',
-              driverName: booking.driverName || 'No Driver Assigned',
+              fare: fareAmount,
+              customerName: customerName,
+              driverName: driverName,
               pickupLocation: booking.pickupLocation || { address: 'No pickup address', coordinates: { lat: 0, lng: 0 } },
               dropoffLocation: booking.dropoffLocation || { address: 'No dropoff address', coordinates: { lat: 0, lng: 0 } },
               paymentStatus: booking.paymentStatus || 'pending',
               createdAt: booking.createdAt || new Date().toISOString(),
               updatedAt: booking.updatedAt || new Date().toISOString(),
-              driverVerified: booking.driverVerified || false
+              driverVerified: booking.driverVerified || false,
+              // Contact information
+              senderInfo: {
+                name: booking.senderInfo?.name || booking.pickup?.name || 'Sender',
+                phone: booking.senderInfo?.phone || booking.pickup?.phone || '+91 9876543210'
+              },
+              recipientInfo: {
+                name: booking.recipientInfo?.name || booking.dropoff?.name || 'Recipient',
+                phone: booking.recipientInfo?.phone || booking.dropoff?.phone || '+91 9876543210'
+              }
             }
           } catch (error) {
             console.error('Error normalizing booking:', error, booking)
@@ -1113,6 +1150,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                 customer: true,
                 driver: true,
                 pickup: true,
+                contact: true,
                 status: true,
                 payment: true,
                 fare: true,
@@ -1252,6 +1290,12 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                   {visibleColumns.pickup && (
                     <TableCell sx={{ fontWeight: 600, color: theme.primary, minWidth: 200 }}>
                       Pickup
+                    </TableCell>
+                  )}
+                  
+                  {visibleColumns.contact && (
+                    <TableCell sx={{ fontWeight: 600, color: theme.primary, minWidth: 200 }}>
+                      Contact Info
                     </TableCell>
                   )}
                   
@@ -1397,6 +1441,25 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                         <Typography variant="body2" title={booking.pickupLocation?.address || 'No pickup address'}>
                           {booking.pickupLocation?.address?.substring(0, 30) || 'No pickup address'}...
                         </Typography>
+                      </TableCell>
+                    )}
+                    
+                    {visibleColumns.contact && (
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight="600" color={theme.primary}>
+                            Sender: {booking.senderInfo?.name || 'N/A'}
+                          </Typography>
+                          <Typography variant="caption" color={theme.text.secondary}>
+                            {booking.senderInfo?.phone || 'N/A'}
+                          </Typography>
+                          <Typography variant="body2" fontWeight="600" color={theme.primary} sx={{ mt: 0.5 }}>
+                            Recipient: {booking.recipientInfo?.name || 'N/A'}
+                          </Typography>
+                          <Typography variant="caption" color={theme.text.secondary}>
+                            {booking.recipientInfo?.phone || 'N/A'}
+                          </Typography>
+                        </Box>
                       </TableCell>
                     )}
                     
@@ -1715,6 +1778,41 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                     </Box>
                   </Grid>
                 </Grid>
+                
+                {/* Contact Information Section */}
+                <Box mt={3}>
+                  <Typography variant="h6" gutterBottom color={theme.primary}>
+                    Contact Information
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Box p={2} sx={{ background: theme.primary + '05', borderRadius: 2 }}>
+                        <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                          Sender (Pickup Contact)
+                        </Typography>
+                        <Typography variant="body1" fontWeight="600">
+                          {selectedBooking.senderInfo?.name || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" color={theme.text.secondary}>
+                          {selectedBooking.senderInfo?.phone || 'N/A'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Box p={2} sx={{ background: theme.primary + '05', borderRadius: 2 }}>
+                        <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                          Recipient (Dropoff Contact)
+                        </Typography>
+                        <Typography variant="body1" fontWeight="600">
+                          {selectedBooking.recipientInfo?.name || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" color={theme.text.secondary}>
+                          {selectedBooking.recipientInfo?.phone || 'N/A'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Box>
               </Grid>
 
               <Grid item xs={12}>

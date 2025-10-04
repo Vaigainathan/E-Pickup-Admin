@@ -149,6 +149,15 @@ export interface Booking {
   updatedAt: string
   scheduledAt?: string
   completedAt?: string
+  // Contact information
+  senderInfo?: {
+    name: string
+    phone: string
+  }
+  recipientInfo?: {
+    name: string
+    phone: string
+  }
 }
 
 // Emergency Types

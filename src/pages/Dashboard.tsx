@@ -209,6 +209,10 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   const [ticketsLoading, setTicketsLoading] = useState(false)
   const [healthLoading, setHealthLoading] = useState(false)
   const [customersLoading, setCustomersLoading] = useState(false)
+  
+  // Revenue state
+  const [revenueLoading, setRevenueLoading] = useState(false)
+  const [revenueData, setRevenueData] = useState<any>(null)
 
   // Initialize service with better error handling
   useEffect(() => {
@@ -646,6 +650,29 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     }
   }, [])
 
+  // Fetch revenue data
+  const fetchRevenue = useCallback(async () => {
+    try {
+      setRevenueLoading(true)
+      console.log('💰 Fetching revenue data...')
+      
+      const response = await comprehensiveAdminService.getRevenueSummary()
+      
+      if (response.success && response.data) {
+        setRevenueData(response.data)
+        console.log('✅ Revenue data fetched successfully:', response.data)
+      } else {
+        console.log('⚠️ Revenue fetch failed:', response.error?.message)
+        setRevenueData(null)
+      }
+    } catch (error) {
+      console.error('❌ Error fetching revenue:', error)
+      setRevenueData(null)
+    } finally {
+      setRevenueLoading(false)
+    }
+  }, [])
+
   // Fetch all data
   const fetchAllData = useCallback(async () => {
     if (!isInitialized) return
@@ -661,7 +688,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         fetchEmergencyAlerts(),
         fetchSupportTickets(),
         fetchSystemHealth(),
-        fetchCustomers()
+        fetchCustomers(),
+        fetchRevenue()
       ])
       
       setLastUpdated(new Date())
@@ -1319,11 +1347,11 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Revenue"
-            value="₹12.5K"
+            value={revenueData ? `₹${(revenueData.thisMonth?.commission || 0).toLocaleString()}` : '₹0'}
             icon={<MoneyIcon />}
             color={AdminColors.revenue}
             subtitle="This month"
-            loading={false}
+            loading={revenueLoading}
             onClick={() => navigate('/analytics')}
           />
         </Grid>

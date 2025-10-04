@@ -134,35 +134,45 @@ interface Driver {
   documents: {
     drivingLicense?: {
       url?: string
+      downloadURL?: string
       status?: string
+      verificationStatus?: string
       verified?: boolean
       uploadedAt?: string
       expiryDate?: string
     }
     aadhaar?: {
       url?: string
+      downloadURL?: string
       status?: string
+      verificationStatus?: string
       verified?: boolean
       uploadedAt?: string
       expiryDate?: string
     }
     insurance?: {
       url?: string
+      downloadURL?: string
       status?: string
+      verificationStatus?: string
       verified?: boolean
       uploadedAt?: string
       expiryDate?: string
     }
     rcBook?: {
       url?: string
+      downloadURL?: string
       status?: string
+      verificationStatus?: string
       verified?: boolean
       uploadedAt?: string
       expiryDate?: string
     }
     profilePhoto?: {
       url?: string
+      downloadURL?: string
       status?: string
+      verificationStatus?: string
       verified?: boolean
       uploadedAt?: string
       expiryDate?: string
@@ -401,10 +411,99 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             color: driver?.vehicleInfo?.color || driver?.vehicle?.color || 'Unknown',
             plateNumber: driver?.vehicleInfo?.plateNumber || driver?.vehicle?.plateNumber || 'Unknown'
           },
-          // Ensure status and verification flags with validation
-          isActive: driver?.isActive !== false,
-          isVerified: driver?.driver?.verificationStatus === 'verified' || driver?.isVerified === true,
-          status: driver?.driver?.verificationStatus || driver?.status || 'pending',
+          // CRITICAL FIX: Add vehicleDetails mapping for admin dashboard display
+          vehicleDetails: driver?.driver?.vehicleDetails || driver?.vehicleDetails || {
+            vehicleType: driver?.vehicleInfo?.make || 'motorcycle',
+            vehicleNumber: driver?.vehicleInfo?.plateNumber || 'Not provided',
+            vehicleMake: driver?.vehicleInfo?.make || 'Not provided',
+            vehicleModel: driver?.vehicleInfo?.model || 'Not provided',
+            vehicleYear: driver?.vehicleInfo?.year || new Date().getFullYear(),
+            vehicleColor: driver?.vehicleInfo?.color || 'Not provided',
+            licenseNumber: driver?.driver?.vehicleDetails?.licenseNumber || 'Not provided',
+            licenseExpiry: driver?.driver?.vehicleDetails?.licenseExpiry || 'Not provided',
+            rcNumber: driver?.driver?.vehicleDetails?.rcNumber || 'Not provided',
+            insuranceNumber: driver?.driver?.vehicleDetails?.insuranceNumber || 'Not provided',
+            insuranceExpiry: driver?.driver?.vehicleDetails?.insuranceExpiry || 'Not provided'
+          },
+          // CRITICAL FIX: Enhanced verification status calculation
+          isVerified: (() => {
+            // Check multiple verification status indicators
+            const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
+            const userIsVerified = driver?.driver?.isVerified || driver?.isVerified
+            
+            // Check if all required documents are verified
+            const documents = driver?.documents || {}
+            const requiredDocTypes = ['drivingLicense', 'aadhaar', 'insurance', 'rcBook', 'profilePhoto']
+            let verifiedDocs = 0
+            let totalDocs = 0
+            
+            requiredDocTypes.forEach(docType => {
+              const doc = documents[docType as keyof Driver['documents']]
+              if (doc && (doc.url || doc.downloadURL)) {
+                totalDocs++
+                const isVerified = doc.verified === true || 
+                                  doc.status === 'verified' || 
+                                  doc.verificationStatus === 'verified'
+                if (isVerified) {
+                  verifiedDocs++
+                }
+              }
+            })
+            
+            // Driver is verified if:
+            // 1. Explicitly marked as verified/approved, OR
+            // 2. All documents are verified
+            const allDocsVerified = totalDocs > 0 && verifiedDocs === totalDocs
+            const isExplicitlyVerified = driverVerificationStatus === 'verified' || 
+                                       driverVerificationStatus === 'approved' || 
+                                       userIsVerified === true
+            
+            console.log('🔍 Verification status calculation:', {
+              driverId: driver?.id,
+              driverVerificationStatus,
+              userIsVerified,
+              verifiedDocs,
+              totalDocs,
+              allDocsVerified,
+              isExplicitlyVerified,
+              finalStatus: isExplicitlyVerified || allDocsVerified
+            })
+            
+            return isExplicitlyVerified || allDocsVerified
+          })(),
+          status: (() => {
+            const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
+            const documents = driver?.documents || {}
+            const requiredDocTypes = ['drivingLicense', 'aadhaar', 'insurance', 'rcBook', 'profilePhoto']
+            let verifiedDocs = 0
+            let totalDocs = 0
+            
+            requiredDocTypes.forEach(docType => {
+              const doc = documents[docType as keyof Driver['documents']]
+              if (doc && (doc.url || doc.downloadURL)) {
+                totalDocs++
+                const isVerified = doc.verified === true || 
+                                  doc.status === 'verified' || 
+                                  doc.verificationStatus === 'verified'
+                if (isVerified) {
+                  verifiedDocs++
+                }
+              }
+            })
+            
+            // Determine status based on verification state
+            if (driverVerificationStatus === 'verified' || driverVerificationStatus === 'approved') {
+              return 'verified'
+            } else if (driverVerificationStatus === 'rejected') {
+              return 'rejected'
+            } else if (totalDocs > 0 && verifiedDocs === totalDocs) {
+              return 'verified'
+            } else if (totalDocs > 0 && verifiedDocs > 0) {
+              return 'pending_verification'
+            } else {
+              return 'pending'
+            }
+          })(),
           isOnline: driver?.isOnline || false,
           isAvailable: driver?.isAvailable || false,
           rating: Math.max(0, Math.min(5, driver?.rating || 0)), // Clamp rating between 0-5
@@ -763,8 +862,38 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   const getDocumentStatus = useCallback((documents: Driver['documents']) => {
     if (!documents || typeof documents !== 'object' || documents === null) return '0/0'
     try {
-      const totalDocs = Object.keys(documents).length
-      const verifiedDocs = Object.values(documents).filter(doc => doc && typeof doc === 'object' && doc.verified).length
+      // CRITICAL FIX: Properly count verified documents
+      const requiredDocTypes = ['drivingLicense', 'aadhaar', 'insurance', 'rcBook', 'profilePhoto']
+      let totalDocs = 0
+      let verifiedDocs = 0
+      
+      requiredDocTypes.forEach(docType => {
+        const doc = documents[docType as keyof Driver['documents']]
+        if (doc && (doc.url || doc.downloadURL)) {
+          totalDocs++
+          // Check multiple verification indicators
+          const isVerified = doc.verified === true || 
+                            doc.status === 'verified' || 
+                            doc.verificationStatus === 'verified'
+          if (isVerified) {
+            verifiedDocs++
+          }
+        }
+      })
+      
+      console.log('📊 Document status calculation:', {
+        totalDocs,
+        verifiedDocs,
+        documents: Object.keys(documents),
+        docDetails: Object.entries(documents).map(([key, doc]) => ({
+          type: key,
+          hasUrl: !!(doc?.url || doc?.downloadURL),
+          verified: doc?.verified,
+          status: doc?.status,
+          verificationStatus: doc?.verificationStatus
+        }))
+      })
+      
       return `${verifiedDocs}/${totalDocs}`
     } catch (error) {
       console.error('Error in getDocumentStatus:', error)
@@ -1313,6 +1442,19 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       
       if (response.success) {
         console.log(`✅ Document ${documentType} ${status} successfully`)
+        
+        // CRITICAL FIX: Sync driver verification status after document verification
+        try {
+          console.log('🔄 Syncing driver verification status...')
+          const syncResponse = await comprehensiveAdminService.syncAllDriversStatus()
+          if (syncResponse.success) {
+            console.log('✅ Driver verification status synced successfully')
+          } else {
+            console.warn('⚠️ Failed to sync driver status:', syncResponse.error)
+          }
+        } catch (syncError) {
+          console.warn('⚠️ Error syncing driver status:', syncError)
+        }
         
         // Show success message
         setSuccess(`Document ${documentType} ${status} successfully`)
@@ -2718,6 +2860,70 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                   size="small"
                 />
               </Box>
+
+              {/* Vehicle Details Section - CRITICAL ENHANCEMENT */}
+              {selectedDriver?.vehicleDetails && (
+                <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(25, 118, 210, 0.05)', borderRadius: 2, border: '1px solid rgba(25, 118, 210, 0.2)' }}>
+                  <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 600 }}>
+                    🚗 Vehicle Details for Verification
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>Vehicle Type:</strong> {selectedDriver.vehicleDetails.vehicleType}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>Vehicle Number:</strong> {selectedDriver.vehicleDetails.vehicleNumber}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>Make & Model:</strong> {selectedDriver.vehicleDetails.vehicleMake} {selectedDriver.vehicleDetails.vehicleModel}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>Year:</strong> {selectedDriver.vehicleDetails.vehicleYear}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>Color:</strong> {selectedDriver.vehicleDetails.vehicleColor}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>License Number:</strong> {selectedDriver.vehicleDetails.licenseNumber}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>License Expiry:</strong> {selectedDriver.vehicleDetails.licenseExpiry}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>RC Number:</strong> {selectedDriver.vehicleDetails.rcNumber}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>Insurance Number:</strong> {selectedDriver.vehicleDetails.insuranceNumber}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={4}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        <strong>Insurance Expiry:</strong> {selectedDriver.vehicleDetails.insuranceExpiry}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                  <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
+                    💡 Compare these details with the uploaded documents (RC Book, License, Insurance) for verification
+                  </Typography>
+                </Box>
+              )}
 
               {/* Documents Grid */}
               <Grid container spacing={3}>

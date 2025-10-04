@@ -51,7 +51,6 @@ interface LayoutProps {
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Driver Management', icon: <PeopleIcon />, path: '/drivers' },
-  { text: 'Driver Data Review', icon: <PeopleIcon />, path: '/driver-data' },
   { text: 'Customer Management', icon: <PeopleIcon />, path: '/customers' },
   { text: 'Booking Management', icon: <LocalShippingIcon />, path: '/bookings' },
   { text: 'Live Tracking', icon: <LiveTrackingIcon />, path: '/live-tracking' },

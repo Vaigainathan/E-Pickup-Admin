@@ -11,7 +11,6 @@ import { Box, CircularProgress } from '@mui/material'
 // Lazy load all pages for better performance
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const DriverManagement = lazy(() => import('./pages/DriverManagement'))
-const DriverDataManagement = lazy(() => import('./pages/DriverDataManagement'))
 const CustomerManagement = lazy(() => import('./pages/CustomerManagement'))
 const CustomerDetail = lazy(() => import('./pages/CustomerDetail'))
 const BookingManagement = lazy(() => import('./pages/BookingManagementModern'))
@@ -66,7 +65,6 @@ function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
             <Route path="/drivers" element={<ErrorBoundary><DriverManagement /></ErrorBoundary>} />
-            <Route path="/driver-data" element={<ErrorBoundary><DriverDataManagement /></ErrorBoundary>} />
             <Route path="/customers" element={<ErrorBoundary><CustomerManagement /></ErrorBoundary>} />
             <Route path="/customers/:id" element={<ErrorBoundary><CustomerDetail /></ErrorBoundary>} />
             <Route path="/bookings" element={<ErrorBoundary><BookingManagement /></ErrorBoundary>} />

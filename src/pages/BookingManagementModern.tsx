@@ -1813,6 +1813,93 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                     </Grid>
                   </Grid>
                 </Box>
+                
+                {/* Photo Verification Section */}
+                <Box mt={3}>
+                  <Typography variant="h6" gutterBottom color={theme.primary}>
+                    Photo Verification
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Box p={2} sx={{ background: theme.primary + '05', borderRadius: 2 }}>
+                        <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                          Pickup Verification
+                        </Typography>
+                        {selectedBooking.pickupVerification ? (
+                          <Box>
+                            <Box mb={1}>
+                              <img 
+                                src={selectedBooking.pickupVerification.photoUrl} 
+                                alt="Pickup verification" 
+                                style={{ 
+                                  width: '100%', 
+                                  maxWidth: '200px', 
+                                  height: '150px', 
+                                  objectFit: 'cover', 
+                                  borderRadius: '8px' 
+                                }} 
+                              />
+                            </Box>
+                            <Typography variant="body2" color={theme.text.secondary}>
+                              Verified: {new Date(selectedBooking.pickupVerification.verifiedAt).toLocaleString()}
+                            </Typography>
+                            <Typography variant="body2" color={theme.text.secondary}>
+                              By: {selectedBooking.pickupVerification.verifiedBy}
+                            </Typography>
+                            {selectedBooking.pickupVerification.notes && (
+                              <Typography variant="body2" color={theme.text.secondary}>
+                                Notes: {selectedBooking.pickupVerification.notes}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color={theme.text.secondary}>
+                            No pickup verification photo
+                          </Typography>
+                        )}
+                      </Box>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <Box p={2} sx={{ background: theme.primary + '05', borderRadius: 2 }}>
+                        <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                          Delivery Verification
+                        </Typography>
+                        {selectedBooking.deliveryVerification ? (
+                          <Box>
+                            <Box mb={1}>
+                              <img 
+                                src={selectedBooking.deliveryVerification.photoUrl} 
+                                alt="Delivery verification" 
+                                style={{ 
+                                  width: '100%', 
+                                  maxWidth: '200px', 
+                                  height: '150px', 
+                                  objectFit: 'cover', 
+                                  borderRadius: '8px' 
+                                }} 
+                              />
+                            </Box>
+                            <Typography variant="body2" color={theme.text.secondary}>
+                              Verified: {new Date(selectedBooking.deliveryVerification.verifiedAt).toLocaleString()}
+                            </Typography>
+                            <Typography variant="body2" color={theme.text.secondary}>
+                              By: {selectedBooking.deliveryVerification.verifiedBy}
+                            </Typography>
+                            {selectedBooking.deliveryVerification.notes && (
+                              <Typography variant="body2" color={theme.text.secondary}>
+                                Notes: {selectedBooking.deliveryVerification.notes}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color={theme.text.secondary}>
+                            No delivery verification photo
+                          </Typography>
+                        )}
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Box>
               </Grid>
 
               <Grid item xs={12}>

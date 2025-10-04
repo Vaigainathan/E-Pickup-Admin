@@ -639,7 +639,22 @@ class ComprehensiveAdminService {
           createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           scheduledAt: data.scheduledAt?.toDate?.()?.toISOString(),
-          completedAt: data.completedAt?.toDate?.()?.toISOString()
+          completedAt: data.completedAt?.toDate?.()?.toISOString(),
+          // Map photo verifications
+          pickupVerification: data.pickupVerification ? {
+            photoUrl: data.pickupVerification.photoUrl || '',
+            verifiedAt: data.pickupVerification.verifiedAt?.toDate?.()?.toISOString() || data.pickupVerification.verifiedAt || '',
+            verifiedBy: data.pickupVerification.verifiedBy || '',
+            location: data.pickupVerification.location,
+            notes: data.pickupVerification.notes
+          } : undefined,
+          deliveryVerification: data.deliveryVerification ? {
+            photoUrl: data.deliveryVerification.photoUrl || '',
+            verifiedAt: data.deliveryVerification.verifiedAt?.toDate?.()?.toISOString() || data.deliveryVerification.verifiedAt || '',
+            verifiedBy: data.deliveryVerification.verifiedBy || '',
+            location: data.deliveryVerification.location,
+            notes: data.deliveryVerification.notes
+          } : undefined
         } as any)
       })
       

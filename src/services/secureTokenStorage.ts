@@ -183,6 +183,7 @@ class SecureTokenStorage {
 
       return {
         ...tokenData,
+        refreshToken: tokenData.refreshToken, // 🔥 CRITICAL FIX: Ensure refresh token is included
         user
       };
     } catch (error) {

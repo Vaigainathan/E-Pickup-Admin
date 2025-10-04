@@ -60,6 +60,7 @@ class AuthService {
         
         const exchangeData = await exchangeResponse.json()
         const backendToken = exchangeData.data?.token
+        const refreshToken = exchangeData.data?.refreshToken // 🔥 CRITICAL FIX: Get refresh token
         
         if (!backendToken) {
           throw new Error('No backend token received from exchange')
@@ -67,8 +68,13 @@ class AuthService {
         
         console.log('✅ [ADMIN] Token exchange successful')
         
+        // 🔥 CRITICAL FIX: Store refresh token if provided
+        if (refreshToken) {
+          console.log('✅ [ADMIN] Refresh token received and will be stored')
+        }
+        
         // Use backend JWT token
-        const expiresAt = Date.now() + (24 * 60 * 60 * 1000) // 24 hours (backend token lifetime)
+        const expiresAt = Date.now() + (7 * 24 * 60 * 60 * 1000) // 🔥 CRITICAL FIX: 7 days instead of 24 hours // 24 hours (backend token lifetime)
         secureTokenStorage.setTokenData({
           token: backendToken, // Backend JWT token
           expiresAt,
@@ -142,6 +148,7 @@ class AuthService {
         
         secureTokenStorage.setTokenData({
           token: newFirebaseToken, // Firebase ID token
+          refreshToken: existingTokenData?.refreshToken || '', // Keep existing refresh token
           expiresAt,
           user: existingTokenData?.user // Keep existing user data
         })

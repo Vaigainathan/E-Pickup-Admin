@@ -116,6 +116,27 @@ interface Booking {
     name: string
     phone: string
   }
+  // Photo verifications
+  pickupVerification?: {
+    photoUrl: string
+    verifiedAt: string
+    verifiedBy: string
+    location?: {
+      latitude: number
+      longitude: number
+    }
+    notes?: string
+  }
+  deliveryVerification?: {
+    photoUrl: string
+    verifiedAt: string
+    verifiedBy: string
+    location?: {
+      latitude: number
+      longitude: number
+    }
+    notes?: string
+  }
 }
 
 const ModernBookingManagement: React.FC = React.memo(() => {

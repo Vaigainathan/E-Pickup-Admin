@@ -34,10 +34,16 @@ export const analytics = typeof window !== 'undefined' ?
     }
   })() : null;
 
-// App Check is completely disabled to prevent reCAPTCHA issues with Phone Auth
-// This allows Firebase Phone Auth to work properly with test numbers
+// reCAPTCHA Configuration for Admin Dashboard
+export const recaptchaConfig = {
+  siteKey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
+  secretKey: import.meta.env.VITE_RECAPTCHA_SECRET_KEY,
+};
+
+// App Check is disabled for admin dashboard (uses email/password auth)
 let appCheck: any = null;
-console.log('🔧 App Check: Disabled to prevent reCAPTCHA issues with Phone Auth');
+console.log('🔧 App Check: Disabled for admin dashboard (email/password auth)');
+console.log('🔧 reCAPTCHA: Configured for admin dashboard security');
 
 // Connect to emulators only if explicitly enabled
 if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {

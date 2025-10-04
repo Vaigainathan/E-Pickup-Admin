@@ -61,6 +61,29 @@ class FirebaseAuthService {
     try {
       console.log('🔐 [ADMIN] Attempting Firebase authentication:', credentials.email);
       
+      // Execute reCAPTCHA v3 for security (Latest API)
+      try {
+        const { recaptchaService } = await import('./recaptchaService');
+        
+        // Check if reCAPTCHA is available
+        const recaptchaStatus = recaptchaService.getStatus();
+        if (recaptchaStatus.loaded && recaptchaStatus.siteKey) {
+          const recaptchaToken = await recaptchaService.execute('login', 8000); // 8 second timeout
+          console.log('✅ [ADMIN] reCAPTCHA token generated for login');
+          
+          // Optional: Verify token on backend for additional security
+          const verification = await recaptchaService.verifyToken(recaptchaToken);
+          if (!verification.success) {
+            console.warn('⚠️ [ADMIN] reCAPTCHA verification failed:', verification.error);
+          }
+        } else {
+          console.warn('⚠️ [ADMIN] reCAPTCHA not configured, skipping verification');
+        }
+      } catch (recaptchaError: any) {
+        console.warn('⚠️ [ADMIN] reCAPTCHA execution failed, continuing with login:', recaptchaError.message);
+        // Continue with login even if reCAPTCHA fails (for development)
+      }
+      
       // Use Firebase Auth v9+ syntax
       const userCredential = await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
       const user = userCredential.user;

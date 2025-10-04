@@ -13,6 +13,15 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/icon?family=Material+Icons"
     />
+    
+    <!-- reCAPTCHA v3 (Latest API) -->
+    <script src="https://www.google.com/recaptcha/api.js?render=6Lc4QN4rAAAAABEJwxlPY7xosszPIsfq03jLz_9G&onload=recaptchaCallback" async defer></script>
+    <script>
+      // Global callback for reCAPTCHA initialization
+      window.recaptchaCallback = function() {
+        console.log('✅ reCAPTCHA v3 loaded successfully');
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>

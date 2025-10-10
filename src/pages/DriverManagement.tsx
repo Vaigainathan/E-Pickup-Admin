@@ -141,7 +141,7 @@ interface Driver {
       uploadedAt?: string
       expiryDate?: string
     }
-    aadhaar?: {
+    aadhaarCard?: {
       url?: string
       downloadURL?: string
       status?: string
@@ -150,7 +150,7 @@ interface Driver {
       uploadedAt?: string
       expiryDate?: string
     }
-    insurance?: {
+    bikeInsurance?: {
       url?: string
       downloadURL?: string
       status?: string
@@ -242,6 +242,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   // const navigate = useNavigate() // Removed unused variable
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const isMobileDialog = useMediaQuery('(max-width: 600px)')
   
   // Core states
   const [isInitialized, setIsInitialized] = useState(false)
@@ -433,7 +434,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             
             // Check if all required documents are verified
             const documents = driver?.documents || {}
-            const requiredDocTypes = ['drivingLicense', 'aadhaar', 'insurance', 'rcBook', 'profilePhoto']
+            const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
             
@@ -474,7 +475,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
           status: (() => {
             const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
             const documents = driver?.documents || {}
-            const requiredDocTypes = ['drivingLicense', 'aadhaar', 'insurance', 'rcBook', 'profilePhoto']
+            const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
             
@@ -548,8 +549,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         setError(`Failed to fetch drivers: ${response.error || 'Unknown error'}`)
         setIsConnected(false)
         
-        // Set enhanced mock data for demonstration
-        const mockDrivers = [
+        // Set enhanced mock data for demonstration with correct Driver type structure
+        const mockDrivers: Driver[] = [
           {
             id: 'driver-1',
             personalInfo: { name: 'John Smith', email: 'john@example.com', phone: '+1234567890' },
@@ -563,9 +564,11 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             totalTrips: 150,
             earnings: { total: 12500, thisMonth: 2500, lastMonth: 3000 },
             documents: {
-              license: { url: '', status: 'verified', verified: true },
-              insurance: { url: '', status: 'verified', verified: true },
-              registration: { url: '', status: 'verified', verified: true }
+              drivingLicense: { url: '', status: 'verified', verified: true },
+              bikeInsurance: { url: '', status: 'verified', verified: true },
+              rcBook: { url: '', status: 'verified', verified: true },
+              aadhaarCard: { url: '', status: 'verified', verified: true },
+              profilePhoto: { url: '', status: 'verified', verified: true }
             },
             createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
           },
@@ -582,8 +585,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             totalTrips: 0,
             earnings: { total: 0, thisMonth: 0, lastMonth: 0 },
             documents: {
-              license: { url: '', status: 'pending', verified: false },
-              insurance: { url: '', status: 'pending', verified: false }
+              drivingLicense: { url: '', status: 'pending', verified: false },
+              bikeInsurance: { url: '', status: 'pending', verified: false }
             },
             createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
           },
@@ -600,9 +603,11 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             totalTrips: 89,
             earnings: { total: 8900, thisMonth: 1800, lastMonth: 2200 },
             documents: {
-              license: { url: '', status: 'verified', verified: true },
-              insurance: { url: '', status: 'verified', verified: true },
-              registration: { url: '', status: 'verified', verified: true }
+              drivingLicense: { url: '', status: 'verified', verified: true },
+              bikeInsurance: { url: '', status: 'verified', verified: true },
+              rcBook: { url: '', status: 'verified', verified: true },
+              aadhaarCard: { url: '', status: 'verified', verified: true },
+              profilePhoto: { url: '', status: 'verified', verified: true }
             },
             createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
           }
@@ -862,8 +867,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   const getDocumentStatus = useCallback((documents: Driver['documents']) => {
     if (!documents || typeof documents !== 'object' || documents === null) return '0/0'
     try {
-      // CRITICAL FIX: Properly count verified documents
-      const requiredDocTypes = ['drivingLicense', 'aadhaar', 'insurance', 'rcBook', 'profilePhoto']
+      // 🔥 FIX: Match backend document key names exactly
+      const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
       let totalDocs = 0
       let verifiedDocs = 0
       
@@ -2413,7 +2418,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       </SpeedDial>
 
       {/* Verification Dialog */}
-      <Dialog open={verifyDialogOpen} onClose={() => setVerifyDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={verifyDialogOpen} onClose={() => setVerifyDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>
           {verificationStatus === 'approved' ? 'Approve Driver' : 'Reject Driver'}
         </DialogTitle>
@@ -2513,7 +2518,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       </Dialog>
 
       {/* View Driver Dialog */}
-      <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>Driver Details</DialogTitle>
         <DialogContent>
           {selectedDriver && (
@@ -2783,7 +2788,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       </ClickAwayListener>
 
       {/* Enhanced Documents Dialog with Comprehensive Folder Structure */}
-      <Dialog open={documentsDialogOpen} onClose={() => setDocumentsDialogOpen(false)} maxWidth="xl" fullWidth>
+      <Dialog open={documentsDialogOpen} onClose={() => setDocumentsDialogOpen(false)} maxWidth="xl" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Box>
@@ -3160,7 +3165,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>Delete Driver</DialogTitle>
         <DialogContent>
           <Typography>
@@ -3179,7 +3184,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       </Dialog>
 
       {/* Ban Confirmation Dialog */}
-      <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)}>
+      <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>Ban Driver</DialogTitle>
         <DialogContent>
           <Typography>

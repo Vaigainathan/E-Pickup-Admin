@@ -16,6 +16,8 @@ import {
   Alert,
   IconButton,
   Tooltip,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
 import {
   BarChart,
@@ -50,6 +52,15 @@ import { fetchAnalytics, setTimeRange } from '../store/slices/analyticsSlice'
 const Analytics: React.FC = () => {
   const dispatch = useAppDispatch()
   const { data: analyticsData, loading, timeRange } = useSelector((state: RootState) => state.analytics)
+  
+  // Responsive hooks
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'))
+  
+  // Calculate responsive chart height
+  const chartHeight = isMobile ? 250 : isTablet ? 300 : 400
+  const pieChartHeight = isMobile ? 200 : 300
   
   // const [selectedMetric, setSelectedMetric] = useState('bookings')
   const [refreshing, setRefreshing] = useState(false)
@@ -122,7 +133,7 @@ const Analytics: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems={isMobile ? "flex-start" : "center"} mb={3} flexWrap="wrap" gap={2}>
         <Box display="flex" alignItems="center" gap={2}>
           <Avatar sx={{ bgcolor: 'primary.main' }}>
             <AssessmentIcon />
@@ -253,12 +264,21 @@ const Analytics: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Revenue Trend
               </Typography>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={chartHeight}>
                 <AreaChart data={revenueData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <RechartsTooltip formatter={(value) => [`₹${value}`, 'Revenue']} />
+                  <XAxis 
+                    dataKey="date"
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
+                    angle={isMobile ? -45 : 0}
+                    textAnchor={isMobile ? "end" : "middle"}
+                    height={isMobile ? 60 : 30}
+                  />
+                  <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
+                  <RechartsTooltip 
+                    formatter={(value) => [`₹${value}`, 'Revenue']}
+                    contentStyle={{ fontSize: isMobile ? '12px' : '14px', padding: isMobile ? '4px 8px' : '8px 12px' }}
+                  />
                   <Area
                     type="monotone"
                     dataKey="value"
@@ -279,15 +299,15 @@ const Analytics: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Driver Status Distribution
               </Typography>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={pieChartHeight}>
                 <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                    outerRadius={80}
+                    label={isMobile ? false : ({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                    outerRadius={isMobile ? 60 : 80}
                     fill="#8884d8"
                     dataKey="value"
                   >
@@ -295,7 +315,7 @@ const Analytics: React.FC = () => {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <RechartsTooltip />
+                  <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
                 </PieChart>
               </ResponsiveContainer>
             </CardContent>
@@ -309,13 +329,22 @@ const Analytics: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Booking Trends
               </Typography>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={chartHeight}>
                 <LineChart data={bookingData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <RechartsTooltip />
-                  <Legend />
+                  <XAxis 
+                    dataKey="date"
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
+                    angle={isMobile ? -45 : 0}
+                    textAnchor={isMobile ? "end" : "middle"}
+                    height={isMobile ? 60 : 30}
+                  />
+                  <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
+                  <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
+                  <Legend 
+                    wrapperStyle={{ fontSize: isMobile ? '11px' : '13px', paddingTop: isMobile ? '10px' : '5px' }}
+                    iconSize={isMobile ? 8 : 14}
+                  />
                   <Line
                     type="monotone"
                     dataKey="value"
@@ -336,16 +365,22 @@ const Analytics: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Booking Status Distribution
               </Typography>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={chartHeight}>
                 <BarChart data={[
                   { name: 'Completed', value: analyticsData?.bookings.completed || 0 },
                   { name: 'Active', value: analyticsData?.bookings.active || 0 },
                   { name: 'Total', value: analyticsData?.bookings.total || 0 },
                 ]}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <RechartsTooltip />
+                  <XAxis 
+                    dataKey="name"
+                    tick={{ fontSize: isMobile ? 10 : 12 }}
+                    angle={isMobile ? -45 : 0}
+                    textAnchor={isMobile ? "end" : "middle"}
+                    height={isMobile ? 60 : 30}
+                  />
+                  <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
+                  <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
                   <Bar dataKey="value" fill="#8884d8" />
                 </BarChart>
               </ResponsiveContainer>

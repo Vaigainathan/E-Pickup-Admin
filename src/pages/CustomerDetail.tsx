@@ -26,6 +26,7 @@ import {
   Tab,
   Breadcrumbs,
   Link,
+  useMediaQuery,
 } from '@mui/material'
 import {
   Person as PersonIcon,
@@ -87,10 +88,11 @@ interface Booking {
 }
 
 const CustomerDetail: React.FC = () => {
-  // const theme = useTheme()
+  // Responsive hooks
+  const isMobileDialog = useMediaQuery('(max-width: 600px)')
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
-  // const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+
 
   // State management
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -549,7 +551,7 @@ const CustomerDetail: React.FC = () => {
       </Card>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>Delete Customer</DialogTitle>
         <DialogContent>
           <Typography>
@@ -568,7 +570,7 @@ const CustomerDetail: React.FC = () => {
       </Dialog>
 
       {/* Ban Confirmation Dialog */}
-      <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)}>
+      <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>Ban Customer</DialogTitle>
         <DialogContent>
           <Typography>
@@ -592,7 +594,7 @@ const CustomerDetail: React.FC = () => {
       </Dialog>
 
       {/* Suspend/Unsuspend Dialog */}
-      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)}>
+      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>
           {customer.accountStatus === 'suspended' ? 'Unsuspend' : 'Suspend'} Customer
         </DialogTitle>

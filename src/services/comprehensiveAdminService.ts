@@ -383,10 +383,12 @@ class ComprehensiveAdminService {
         const data = doc.data()
         
         // Get verification request for this driver to get actual document URLs
+        // ✅ FIX: Remove 'pending' filter to get all documents (including verified ones)
         const verificationQuery = query(
           collection(db, 'documentVerificationRequests'),
           where('driverId', '==', doc.id),
-          where('status', '==', 'pending')
+          orderBy('createdAt', 'desc'),
+          limit(1)
         )
         const verificationSnapshot = await getDocs(verificationQuery)
         
@@ -436,39 +438,75 @@ class ComprehensiveAdminService {
             }
           }
         } else {
-          // Fallback to user collection documents (older format)
-          const userDocs = data.driver?.documents || data.documents || {}
-          documents = {
-            drivingLicense: {
-              url: userDocs.drivingLicense?.url || userDocs.driving_license?.url || '',
-              status: (userDocs.drivingLicense?.status || userDocs.driving_license?.status || 'pending') as 'pending' | 'verified' | 'rejected',
-              uploadedAt: userDocs.drivingLicense?.uploadedAt || userDocs.driving_license?.uploadedAt || '',
-              verified: userDocs.drivingLicense?.verified || false
-            },
-            aadhaarCard: {
-              url: userDocs.aadhaar?.url || userDocs.aadhaarCard?.url || userDocs.aadhaar_card?.url || '',
-              status: (userDocs.aadhaar?.status || userDocs.aadhaarCard?.status || userDocs.aadhaar_card?.status || 'pending') as 'pending' | 'verified' | 'rejected',
-              uploadedAt: userDocs.aadhaar?.uploadedAt || userDocs.aadhaarCard?.uploadedAt || userDocs.aadhaar_card?.uploadedAt || '',
-              verified: userDocs.aadhaar?.verified || userDocs.aadhaarCard?.verified || false
-            },
-            bikeInsurance: {
-              url: userDocs.insurance?.url || userDocs.bikeInsurance?.url || userDocs.bike_insurance?.url || '',
-              status: (userDocs.insurance?.status || userDocs.bikeInsurance?.status || userDocs.bike_insurance?.status || 'pending') as 'pending' | 'verified' | 'rejected',
-              uploadedAt: userDocs.insurance?.uploadedAt || userDocs.bikeInsurance?.uploadedAt || userDocs.bike_insurance?.uploadedAt || '',
-              verified: userDocs.insurance?.verified || userDocs.bikeInsurance?.verified || false
-            },
-            rcBook: {
-              url: userDocs.rcBook?.url || userDocs.rc_book?.url || '',
-              status: (userDocs.rcBook?.status || userDocs.rc_book?.status || 'pending') as 'pending' | 'verified' | 'rejected',
-              uploadedAt: userDocs.rcBook?.uploadedAt || userDocs.rc_book?.uploadedAt || '',
-              verified: userDocs.rcBook?.verified || false
-            },
-            profilePhoto: {
-              url: userDocs.profilePhoto?.url || userDocs.profile_photo?.url || '',
-              status: (userDocs.profilePhoto?.status || userDocs.profile_photo?.status || 'pending') as 'pending' | 'verified' | 'rejected',
-              uploadedAt: userDocs.profilePhoto?.uploadedAt || userDocs.profile_photo?.uploadedAt || '',
-              verified: userDocs.profilePhoto?.verified || false
+          // ✅ FIX: Fallback to user collection documents - check BOTH driver.documents and root documents
+          const driverDocs = data.driver?.documents || {}
+          const userDocs = data.documents || {}
+          
+          // Helper function to get document data from multiple possible locations
+          const getDocData = (docType: string, altKeys: string[] = []) => {
+            // Check driver.documents first
+            let doc = driverDocs[docType]
+            if (doc && (doc.url || doc.downloadURL)) {
+              return {
+                url: doc.url || doc.downloadURL || '',
+                status: (doc.status || doc.verificationStatus || 'pending') as 'pending' | 'verified' | 'rejected',
+                uploadedAt: doc.uploadedAt || doc.uploadDate || '',
+                verified: doc.verified === true || doc.status === 'verified' || doc.verificationStatus === 'verified'
+              }
             }
+            
+            // Check alternative keys in driver.documents
+            for (const altKey of altKeys) {
+              doc = driverDocs[altKey]
+              if (doc && (doc.url || doc.downloadURL)) {
+                return {
+                  url: doc.url || doc.downloadURL || '',
+                  status: (doc.status || doc.verificationStatus || 'pending') as 'pending' | 'verified' | 'rejected',
+                  uploadedAt: doc.uploadedAt || doc.uploadDate || '',
+                  verified: doc.verified === true || doc.status === 'verified' || doc.verificationStatus === 'verified'
+                }
+              }
+            }
+            
+            // Check root documents
+            doc = userDocs[docType]
+            if (doc && (doc.url || doc.downloadURL)) {
+              return {
+                url: doc.url || doc.downloadURL || '',
+                status: (doc.status || doc.verificationStatus || 'pending') as 'pending' | 'verified' | 'rejected',
+                uploadedAt: doc.uploadedAt || doc.uploadDate || '',
+                verified: doc.verified === true || doc.status === 'verified' || doc.verificationStatus === 'verified'
+              }
+            }
+            
+            // Check alternative keys in root documents
+            for (const altKey of altKeys) {
+              doc = userDocs[altKey]
+              if (doc && (doc.url || doc.downloadURL)) {
+                return {
+                  url: doc.url || doc.downloadURL || '',
+                  status: (doc.status || doc.verificationStatus || 'pending') as 'pending' | 'verified' | 'rejected',
+                  uploadedAt: doc.uploadedAt || doc.uploadDate || '',
+                  verified: doc.verified === true || doc.status === 'verified' || doc.verificationStatus === 'verified'
+                }
+              }
+            }
+            
+            // Return empty document
+            return {
+              url: '',
+              status: 'pending' as 'pending' | 'verified' | 'rejected',
+              uploadedAt: '',
+              verified: false
+            }
+          }
+          
+          documents = {
+            drivingLicense: getDocData('drivingLicense', ['driving_license', 'drivingLicence']),
+            aadhaarCard: getDocData('aadhaarCard', ['aadhaar_card', 'aadhaar', 'aadharCard']),
+            bikeInsurance: getDocData('bikeInsurance', ['bike_insurance', 'insurance']),
+            rcBook: getDocData('rcBook', ['rc_book', 'rccard', 'registrationCertificate']),
+            profilePhoto: getDocData('profilePhoto', ['profile_photo', 'photo'])
           }
         }
         
@@ -506,8 +544,41 @@ class ComprehensiveAdminService {
             thisMonth: 0,
             lastMonth: 0
           },
-          status: data.driver?.verificationStatus || (data.isVerified ? 'verified' : 'pending'),
-          isVerified: data.driver?.verificationStatus === 'verified' || data.isVerified || false,
+          // ✅ FIX: Check multiple status fields and document verification
+          status: (() => {
+            // Priority 1: Check driver.verificationStatus
+            if (data.driver?.verificationStatus === 'approved' || data.driver?.verificationStatus === 'verified') {
+              return 'verified'
+            }
+            if (data.driver?.verificationStatus === 'rejected') {
+              return 'rejected'
+            }
+            
+            // Priority 2: Check isVerified flag
+            if (data.driver?.isVerified === true || data.isVerified === true) {
+              return 'verified'
+            }
+            
+            // Priority 3: Check if all documents are verified
+            const driverDocs = data.driver?.documents || {}
+            const docKeys = Object.keys(driverDocs)
+            if (docKeys.length > 0) {
+              const allVerified = docKeys.every(key => {
+                const doc = driverDocs[key]
+                return doc && (doc.verified === true || doc.status === 'verified' || doc.verificationStatus === 'verified')
+              })
+              if (allVerified) {
+                return 'verified'
+              }
+            }
+            
+            return 'pending'
+          })(),
+          isVerified: data.driver?.verificationStatus === 'approved' || 
+                     data.driver?.verificationStatus === 'verified' || 
+                     data.driver?.isVerified === true ||
+                     data.isVerified === true ||
+                     false,
           createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
         } as Driver)

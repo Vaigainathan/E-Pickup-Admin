@@ -134,37 +134,27 @@ class AuthService {
 
   async refreshToken(): Promise<LoginResponse> {
     try {
-      // Use Firebase Auth to refresh token
-      const { firebaseAuthService } = await import('./firebaseAuthService')
-      const newFirebaseToken = await firebaseAuthService.getIdToken(true)
+      console.log('🔄 [ADMIN] Refreshing token via apiService...')
       
-      if (newFirebaseToken) {
-        console.log('✅ [ADMIN] Firebase token refreshed successfully')
+      // Use apiService.refreshToken which handles the Firebase ID token -> backend JWT exchange
+      const success = await apiService.refreshToken()
+      
+      if (success) {
+        console.log('✅ [ADMIN] Token refreshed successfully via apiService')
         
-        // Use refreshed Firebase ID token directly - no exchange needed!
-        const expiresAt = Date.now() + (60 * 60 * 1000) // 1 hour (Firebase token lifetime)
-        
-        const existingTokenData = await secureTokenStorage.getTokenData()
-        
-        secureTokenStorage.setTokenData({
-          token: newFirebaseToken, // Firebase ID token
-          refreshToken: existingTokenData?.refreshToken || '', // Keep existing refresh token
-          expiresAt,
-          user: existingTokenData?.user // Keep existing user data
-        })
-        
-        apiService.setToken(newFirebaseToken)
+        // Get the updated token data
+        const tokenData = await secureTokenStorage.getTokenData()
         
         return {
-          user: existingTokenData?.user || {} as User,
-          token: newFirebaseToken,
+          user: tokenData?.user || {} as User,
+          token: tokenData?.token || '',
           message: 'Token refreshed successfully'
         }
       }
       
-      throw new Error('Failed to refresh Firebase token')
+      throw new Error('Failed to refresh token via apiService')
     } catch (error: any) {
-      console.error('Token refresh error:', error)
+      console.error('❌ [ADMIN] Token refresh error:', error)
       throw new Error(error.message || 'Token refresh failed')
     }
   }

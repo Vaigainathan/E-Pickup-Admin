@@ -31,6 +31,7 @@ import {
   ListItemIcon,
   ListItemText,
   InputAdornment,
+  useMediaQuery,
 } from '@mui/material'
 import {
   Person as PersonIcon,
@@ -71,9 +72,10 @@ interface Customer {
 }
 
 const CustomerManagement: React.FC = () => {
-  // const theme = useTheme()
   const navigate = useNavigate()
-  // const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  
+  // Responsive hooks
+  const isMobileDialog = useMediaQuery('(max-width: 600px)')
 
   // State management
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -275,7 +277,7 @@ const CustomerManagement: React.FC = () => {
       {/* Filters and Search */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="center">
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
@@ -492,7 +494,7 @@ const CustomerManagement: React.FC = () => {
       </Menu>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>Delete Customer</DialogTitle>
         <DialogContent>
           <Typography>
@@ -511,7 +513,7 @@ const CustomerManagement: React.FC = () => {
       </Dialog>
 
       {/* Ban Confirmation Dialog */}
-      <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)}>
+      <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>Ban Customer</DialogTitle>
         <DialogContent>
           <Typography>
@@ -535,7 +537,7 @@ const CustomerManagement: React.FC = () => {
       </Dialog>
 
       {/* Suspend/Unsuspend Dialog */}
-      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)}>
+      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} fullScreen={isMobileDialog}>
         <DialogTitle>
           {actionMenuCustomer?.accountStatus === 'suspended' ? 'Unsuspend' : 'Suspend'} Customer
         </DialogTitle>

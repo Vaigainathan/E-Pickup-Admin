@@ -3,6 +3,7 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported } from 'firebase/analytics';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -40,10 +41,25 @@ export const recaptchaConfig = {
   secretKey: import.meta.env.VITE_RECAPTCHA_SECRET_KEY,
 };
 
-// App Check is disabled for admin dashboard (uses email/password auth)
+// Initialize App Check with reCAPTCHA v3 for admin dashboard (web app)
 let appCheck: any = null;
-console.log('🔧 App Check: Disabled for admin dashboard (email/password auth)');
-console.log('🔧 reCAPTCHA: Configured for admin dashboard security');
+
+if (typeof window !== 'undefined' && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+  try {
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+      isTokenAutoRefreshEnabled: true
+    });
+    console.log('✅ App Check: Initialized with reCAPTCHA v3 for admin dashboard');
+  } catch (error) {
+    console.warn('⚠️ App Check: Failed to initialize with reCAPTCHA:', error);
+    appCheck = null;
+  }
+} else {
+  console.log('🔧 App Check: Disabled for admin dashboard (no reCAPTCHA site key)');
+  console.log('🔧 reCAPTCHA: Configured for admin dashboard security');
+  console.log('🔧 Security: Admin dashboard uses email/password + reCAPTCHA v3');
+}
 
 // Connect to emulators only if explicitly enabled
 if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {

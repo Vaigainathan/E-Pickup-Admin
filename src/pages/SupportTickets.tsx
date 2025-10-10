@@ -29,6 +29,7 @@ import {
   ListItemAvatar,
   MenuItem,
   CircularProgress,
+  useMediaQuery,
 } from '@mui/material'
 import {
   Support as SupportIcon,
@@ -46,6 +47,9 @@ import { fetchSupportTickets, updateTicketStatus, sendMessage, setPagination } f
 import { SupportTicket } from '../types'
 
 const SupportTickets: React.FC = () => {
+  // Responsive hooks
+  const isMobileDialog = useMediaQuery('(max-width: 600px)')
+  
   const dispatch = useAppDispatch()
   const { tickets, loading, pagination, filters, stats } = useSelector((state: RootState) => state.support)
   
@@ -383,7 +387,7 @@ const SupportTickets: React.FC = () => {
       </Card>
 
       {/* View Ticket Dialog */}
-      <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>Support Ticket Details</DialogTitle>
         <DialogContent>
           {selectedTicket && (
@@ -494,7 +498,7 @@ const SupportTickets: React.FC = () => {
       </Dialog>
 
       {/* Reply Dialog */}
-      <Dialog open={replyDialogOpen} onClose={() => setReplyDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={replyDialogOpen} onClose={() => setReplyDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>Reply to Ticket</DialogTitle>
         <DialogContent>
           {selectedTicket && (
@@ -529,7 +533,7 @@ const SupportTickets: React.FC = () => {
       </Dialog>
 
       {/* Status Update Dialog */}
-      <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>Update Ticket Status</DialogTitle>
         <DialogContent>
           {selectedTicket && (

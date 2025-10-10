@@ -185,6 +185,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   // Responsive breakpoints
   const isMobile = useMediaQuery('(max-width: 600px)')
   const isTablet = useMediaQuery('(max-width: 960px)')
+  const isMobileDialog = useMediaQuery('(max-width: 600px)') // For fullscreen dialogs on mobile
   // const isDesktop = useMediaQuery('(min-width: 1200px)')
   
   // Auto-adjust view mode based on screen size
@@ -197,31 +198,31 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   // Responsive column management
   useEffect(() => {
     if (isMobile) {
-      // Show only essential columns on mobile
+      // Show only 4 essential columns on mobile for better readability
       setVisibleColumns({
-        bookingId: true,
-        customer: true,
-        driver: false,
-        pickup: false,
-        contact: true,
-        status: true,
-        payment: false,
-        fare: true,
-        created: false,
-        actions: true
+        bookingId: false,     // Hide - shown in detail view
+        customer: true,       // Keep - primary identifier
+        driver: false,        // Hide - shown in detail
+        pickup: false,        // Hide - shown in detail
+        contact: false,       // Hide - shown in detail
+        status: true,         // Keep - critical info
+        payment: false,       // Hide - shown in detail
+        fare: true,           // Keep - important for admin
+        created: false,       // Hide - less critical on mobile
+        actions: true         // Keep - view/edit buttons
       })
     } else if (isTablet) {
-      // Show most important columns on tablet
+      // Show 6 important columns on tablet
       setVisibleColumns({
         bookingId: true,
         customer: true,
         driver: true,
-        pickup: false,
-        contact: true,
+        pickup: false,        // Hide on tablet too
+        contact: false,       // Hide on tablet too
         status: true,
         payment: true,
         fare: true,
-        created: false,
+        created: false,       // Hide on tablet
         actions: true
       })
     } else {
@@ -907,7 +908,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       {/* Search and Filters */}
       <Card sx={{ mb: 4, boxShadow: theme.shadow }}>
         <CardContent>
-          <Grid container spacing={3} alignItems="center">
+          <Grid container spacing={{ xs: 2, sm: 2, md: 3 }} alignItems="center">
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
@@ -1035,7 +1036,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           </Grid>
           
           {/* Advanced Actions Row */}
-          <Grid container spacing={2} alignItems="center" sx={{ mt: 2 }}>
+          <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="center" sx={{ mt: { xs: 1.5, sm: 2 } }}>
             <Grid item xs={12} md={6}>
               <Box display="flex" gap={2} alignItems="center">
                 {selectedBookings.length > 0 && (
@@ -1130,7 +1131,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       )}
 
       {/* Column Settings Dialog */}
-      <Dialog open={showColumnSettings} onClose={() => setShowColumnSettings(false)} maxWidth="sm" fullWidth>
+      <Dialog open={showColumnSettings} onClose={() => setShowColumnSettings(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h6">Column Visibility</Typography>
@@ -1235,6 +1236,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           <TableContainer sx={{ 
             maxWidth: '100%',
             overflowX: 'auto',
+            position: 'relative',
             '&::-webkit-scrollbar': {
               height: '8px',
             },
@@ -1249,6 +1251,19 @@ const ModernBookingManagement: React.FC = React.memo(() => {
             '&::-webkit-scrollbar-thumb:hover': {
               backgroundColor: theme.primaryDark,
             },
+            // Scroll hint gradient for mobile/tablet
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              bottom: '8px',
+              width: '40px',
+              background: 'linear-gradient(to left, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)',
+              pointerEvents: 'none',
+              display: { xs: 'block', md: 'none' },
+              zIndex: 1
+            }
           }}>
             <Table sx={{ minWidth: 800 }}>
               <TableHead>
@@ -1715,6 +1730,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         onClose={() => setViewDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobileDialog}
       >
         <DialogTitle sx={{ background: theme.primary, color: 'white' }}>
           <Box display="flex" alignItems="center" gap={1}>
@@ -1999,6 +2015,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         onClose={() => setStatusDialogOpen(false)}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobileDialog}
       >
         <DialogTitle sx={{ background: theme.primary, color: 'white' }}>
           Update Booking Status
@@ -2047,6 +2064,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         onClose={() => setShowBulkActions(false)}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobileDialog}
       >
         <DialogTitle sx={{ background: theme.primary, color: 'white' }}>
           Bulk Actions
@@ -2093,6 +2111,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         onClose={() => setShowExportDialog(false)}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobileDialog}
       >
         <DialogTitle sx={{ background: theme.success, color: 'white' }}>
           Export Bookings

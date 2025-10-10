@@ -21,6 +21,7 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
+  useMediaQuery,
 } from '@mui/material'
 import {
   Save as SaveIcon,
@@ -46,6 +47,9 @@ import {
 } from '../store/slices/settingsSlice'
 
 const Settings: React.FC = () => {
+  // Responsive hooks
+  const isMobileDialog = useMediaQuery('(max-width: 600px)')
+  
   const dispatch = useAppDispatch()
   const { user } = useSelector((state: RootState) => state.auth)
   const { settings, loading } = useSelector((state: RootState) => state.settings) // Removed unused error
@@ -430,7 +434,7 @@ const Settings: React.FC = () => {
       </Grid>
 
       {/* Change Password Dialog */}
-      <Dialog open={passwordDialogOpen} onClose={() => setPasswordDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={passwordDialogOpen} onClose={() => setPasswordDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>Change Password</DialogTitle>
         <DialogContent>
           <TextField

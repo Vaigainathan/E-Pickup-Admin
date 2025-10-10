@@ -1042,7 +1042,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
           <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
             <Box>
               <Typography 
-                variant={isMobile ? "h4" : "h3"} 
+                variant={isMobile ? "h5" : "h3"} 
                 component="h1" 
                 gutterBottom
                 sx={{ 
@@ -1051,7 +1051,12 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                   backgroundClip: 'text',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
-                  mb: 1
+                  mb: 1,
+                  fontSize: { 
+                    xs: '1.5rem',   // 24px on mobile
+                    sm: '2rem',     // 32px on tablet
+                    md: '2.5rem'    // 40px on desktop
+                  }
                 }}
               >
                 EPickup Admin Dashboard
@@ -1347,10 +1352,10 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Revenue"
-            value={revenueData ? `₹${(revenueData.thisMonth?.commission || 0).toLocaleString()}` : '₹0'}
+            value={revenueData ? `₹${(revenueData.thisMonth?.total || 0).toLocaleString()}` : '₹0'}
             icon={<MoneyIcon />}
             color={AdminColors.revenue}
-            subtitle="This month"
+            subtitle={revenueData?.thisMonth?.topUps ? `${revenueData.thisMonth.topUps} top-ups this month` : 'This month'}
             loading={revenueLoading}
             onClick={() => navigate('/analytics')}
           />

@@ -169,7 +169,6 @@ class RecaptchaService {
       
       script.onload = () => {
         console.log('✅ [RECAPTCHA] Script loaded successfully');
-        this.isLoaded = true;
         resolve();
       };
       

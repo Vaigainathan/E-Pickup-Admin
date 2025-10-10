@@ -87,26 +87,40 @@ class ApiService {
     }
   }
 
-         private async request<T>(
-           endpoint: string,
-           options: any = {},
-           isRetry: boolean = false
-         ): Promise<ApiResponse<T>> {
-           const url = `${this.baseURL}${endpoint}`
-           
-           // Create AbortController for timeout
-           const controller = new AbortController()
-           const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-           
-           const config: any = {
-             headers: {
-               'Content-Type': 'application/json',
-               ...(this.token && this.token.length > 10 && { Authorization: `Bearer ${this.token}` }),
-               ...options.headers,
-             },
-             signal: controller.signal,
-             ...options,
-           }
+  private async request<T>(
+    endpoint: string,
+    options: any = {},
+    isRetry: boolean = false
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseURL}${endpoint}`
+    
+    // Create AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+    
+    // Get App Check token if available (for admin dashboard)
+    let appCheckToken: string | null = null;
+    try {
+      const { appCheck } = await import('../config/firebase');
+      if (appCheck) {
+        const tokenResult = await appCheck.getToken();
+        appCheckToken = tokenResult.token;
+        console.log('🔒 [API] App Check token obtained for admin dashboard');
+      }
+    } catch (error) {
+      console.warn('⚠️ [API] App Check token not available:', error);
+    }
+    
+    const config: any = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && this.token.length > 10 && { Authorization: `Bearer ${this.token}` }),
+        ...(appCheckToken && { 'X-Firebase-App-Check': appCheckToken }),
+        ...options.headers,
+      },
+      signal: controller.signal,
+      ...options,
+    }
            
            // Log token status for debugging
            if (this.token) {
@@ -175,14 +189,14 @@ class ApiService {
            }
          }
 
-  private async refreshToken(): Promise<string | null> {
+  private async performTokenRefresh(): Promise<string | null> {
     // Prevent concurrent refresh attempts
     if (this.isRefreshing && this.refreshPromise) {
       return this.refreshPromise
     }
 
     this.isRefreshing = true
-    this.refreshPromise = this.performTokenRefresh()
+    this.refreshPromise = this.performActualTokenRefresh()
 
     try {
       const result = await this.refreshPromise
@@ -193,7 +207,21 @@ class ApiService {
     }
   }
 
-  private async performTokenRefresh(): Promise<string | null> {
+  /**
+   * Public method to refresh token
+   * @returns {Promise<boolean>} Success status
+   */
+  async refreshToken(): Promise<boolean> {
+    try {
+      const newToken = await this.performTokenRefresh()
+      return !!newToken
+    } catch (error) {
+      console.error('❌ [API] Public refresh token error:', error)
+      return false
+    }
+  }
+
+  private async performActualTokenRefresh(): Promise<string | null> {
     try {
       console.log('🔄 [API] Starting token refresh process...')
       

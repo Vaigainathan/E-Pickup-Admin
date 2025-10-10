@@ -26,6 +26,7 @@ import {
   Backdrop,
   Skeleton,
   Zoom,
+  useMediaQuery,
 } from '@mui/material'
 import {
   LocalHospital as EmergencyIcon,
@@ -88,9 +89,8 @@ interface EmergencyAlert {
 }
 
 const ModernEmergencyServices: React.FC = () => {
-  // const theme = useTheme() // Removed unused variable
-  // const isMobile = useMediaQuery('(max-width: 600px)') // Removed unused variable
-  // const isTablet = useMediaQuery('(max-width: 960px)') // Removed unused variable
+  // Responsive hooks
+  const isMobileDialog = useMediaQuery('(max-width: 600px)')
   
   // State management
   const [alerts, setAlerts] = useState<EmergencyAlert[]>([])
@@ -765,7 +765,7 @@ const ModernEmergencyServices: React.FC = () => {
       </Box>
 
       {/* View Alert Dialog */}
-      <Dialog open={viewDialogOpen} onClose={handleCloseViewDialog} maxWidth="md" fullWidth>
+      <Dialog open={viewDialogOpen} onClose={handleCloseViewDialog} maxWidth="md" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h6">Emergency Alert Details</Typography>
@@ -872,7 +872,7 @@ const ModernEmergencyServices: React.FC = () => {
       </Dialog>
 
       {/* Response Dialog */}
-      <Dialog open={responseDialogOpen} onClose={handleCloseResponseDialog} maxWidth="sm" fullWidth>
+      <Dialog open={responseDialogOpen} onClose={handleCloseResponseDialog} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h6">Respond to Emergency Alert</Typography>

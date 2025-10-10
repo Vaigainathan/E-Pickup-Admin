@@ -30,6 +30,7 @@ import {
   Avatar,
   Tabs,
   Tab,
+  useMediaQuery,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -59,6 +60,9 @@ interface AdminUser {
 }
 
 const AdminManagement: React.FC = () => {
+  // Responsive hooks
+  const isMobileDialog = useMediaQuery('(max-width: 600px)')
+  
   const [admins, setAdmins] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -511,7 +515,7 @@ const AdminManagement: React.FC = () => {
         )}
 
         {/* Add/Edit Admin Dialog */}
-        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
           <DialogTitle>
             {editingAdmin ? 'Edit Admin User' : 'Add New Admin User'}
           </DialogTitle>

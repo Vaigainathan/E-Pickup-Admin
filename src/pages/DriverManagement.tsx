@@ -1444,10 +1444,14 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         
         // CRITICAL FIX: Sync driver verification status after document verification
         try {
-          console.log('🔄 Syncing driver verification status...')
-          const syncResponse = await comprehensiveAdminService.syncAllDriversStatus()
+          console.log(`🔄 Syncing driver verification status for: ${selectedDriver.id}`)
+          const syncResponse = await comprehensiveAdminService.syncDriverStatus(selectedDriver.id)
           if (syncResponse.success) {
-            console.log('✅ Driver verification status synced successfully')
+            console.log('✅ Driver verification status synced successfully:', syncResponse.data)
+            // Update local state with new verification status
+            if (syncResponse.data?.verificationStatus) {
+              console.log(`📊 Updated verification status: ${syncResponse.data.verificationStatus}`)
+            }
           } else {
             console.warn('⚠️ Failed to sync driver status:', syncResponse.error)
           }

@@ -121,15 +121,9 @@ interface Driver {
   vehicleDetails?: {
     vehicleType: 'motorcycle' | 'electric'
     vehicleNumber: string
-    vehicleMake: string
     vehicleModel: string
-    vehicleYear: number
-    vehicleColor: string
     licenseNumber: string
     licenseExpiry: string
-    rcNumber: string
-    insuranceNumber: string
-    insuranceExpiry: string
   }
   documents: {
     drivingLicense?: {
@@ -416,15 +410,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
           vehicleDetails: driver?.driver?.vehicleDetails || driver?.vehicleDetails || {
             vehicleType: driver?.vehicleInfo?.make || 'motorcycle',
             vehicleNumber: driver?.vehicleInfo?.plateNumber || 'Not provided',
-            vehicleMake: driver?.vehicleInfo?.make || 'Not provided',
             vehicleModel: driver?.vehicleInfo?.model || 'Not provided',
-            vehicleYear: driver?.vehicleInfo?.year || new Date().getFullYear(),
-            vehicleColor: driver?.vehicleInfo?.color || 'Not provided',
             licenseNumber: driver?.driver?.vehicleDetails?.licenseNumber || 'Not provided',
             licenseExpiry: driver?.driver?.vehicleDetails?.licenseExpiry || 'Not provided',
-            rcNumber: driver?.driver?.vehicleDetails?.rcNumber || 'Not provided',
-            insuranceNumber: driver?.driver?.vehicleDetails?.insuranceNumber || 'Not provided',
-            insuranceExpiry: driver?.driver?.vehicleDetails?.insuranceExpiry || 'Not provided'
+            
           },
           // CRITICAL FIX: Enhanced verification status calculation
           isVerified: (() => {
@@ -1148,7 +1137,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                   whiteSpace: 'nowrap'
                 }}
               >
-                {driver.vehicleDetails?.vehicleMake || driver.vehicleInfo?.make} {driver.vehicleDetails?.vehicleModel || driver.vehicleInfo?.model}
+                {driver.vehicleDetails?.vehicleModel || driver.vehicleInfo?.model}
               </Typography>
             </Box>
             <Typography 
@@ -1173,7 +1162,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                   color="textSecondary"
                   sx={{ fontSize: '0.7rem' }}
                 >
-                  Type: {driver.vehicleDetails.vehicleType} | Year: {driver.vehicleDetails.vehicleYear}
+                  Type: {driver.vehicleDetails.vehicleType}
                 </Typography>
               </Box>
             )}
@@ -2552,16 +2541,16 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                       <strong>Vehicle Number:</strong> {selectedDriver.vehicleDetails.vehicleNumber}
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>Make:</strong> {selectedDriver.vehicleDetails.vehicleMake}
+                      
                     </Typography>
                     <Typography variant="body2" mb={1}>
                       <strong>Model:</strong> {selectedDriver.vehicleDetails.vehicleModel}
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>Year:</strong> {selectedDriver.vehicleDetails.vehicleYear}
+                      
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>Color:</strong> {selectedDriver.vehicleDetails.vehicleColor}
+                      
                     </Typography>
                     <Typography variant="body2" mb={1}>
                       <strong>License Number:</strong> {selectedDriver.vehicleDetails.licenseNumber}
@@ -2570,13 +2559,13 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                       <strong>License Expiry:</strong> {selectedDriver.vehicleDetails.licenseExpiry}
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>RC Number:</strong> {selectedDriver.vehicleDetails.rcNumber}
+                      
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>Insurance Number:</strong> {selectedDriver.vehicleDetails.insuranceNumber}
+                      
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>Insurance Expiry:</strong> {selectedDriver.vehicleDetails.insuranceExpiry}
+                      
                     </Typography>
                   </>
                 ) : (
@@ -2885,17 +2874,17 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>Make & Model:</strong> {selectedDriver.vehicleDetails.vehicleMake} {selectedDriver.vehicleDetails.vehicleModel}
+                        <strong>Model:</strong> {selectedDriver.vehicleDetails.vehicleModel}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>Year:</strong> {selectedDriver.vehicleDetails.vehicleYear}
+                        
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>Color:</strong> {selectedDriver.vehicleDetails.vehicleColor}
+                        
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
@@ -2910,17 +2899,17 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>RC Number:</strong> {selectedDriver.vehicleDetails.rcNumber}
+                        
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>Insurance Number:</strong> {selectedDriver.vehicleDetails.insuranceNumber}
+                        
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>Insurance Expiry:</strong> {selectedDriver.vehicleDetails.insuranceExpiry}
+                        
                       </Typography>
                     </Grid>
                   </Grid>

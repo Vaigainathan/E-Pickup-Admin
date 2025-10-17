@@ -440,13 +440,18 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               }
             })
             
-            // Driver is verified if:
-            // 1. Explicitly marked as verified/approved, OR
-            // 2. All documents are verified
+            // CRITICAL FIX: Driver is verified ONLY if:
+            // 1. Explicitly marked as verified/approved (not pending_verification)
+            // 2. AND all documents are verified
+            // 3. Exclude 'pending_verification' status - that means waiting for admin review
             const allDocsVerified = totalDocs > 0 && verifiedDocs === totalDocs
-            const isExplicitlyVerified = driverVerificationStatus === 'verified' || 
-                                       driverVerificationStatus === 'approved' || 
-                                       userIsVerified === true
+            const isExplicitlyVerified = (driverVerificationStatus === 'verified' || 
+                                         driverVerificationStatus === 'approved') && 
+                                         driverVerificationStatus !== 'pending_verification' &&
+                                         driverVerificationStatus !== 'pending'
+            
+            // Final verification: Must be explicitly verified AND all docs verified
+            const finalIsVerified = isExplicitlyVerified && allDocsVerified
             
             console.log('🔍 Verification status calculation:', {
               driverId: driver?.id,
@@ -456,10 +461,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               totalDocs,
               allDocsVerified,
               isExplicitlyVerified,
-              finalStatus: isExplicitlyVerified || allDocsVerified
+              finalStatus: finalIsVerified
             })
             
-            return isExplicitlyVerified || allDocsVerified
+            return finalIsVerified
           })(),
           status: (() => {
             const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
@@ -2792,7 +2797,14 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             </Box>
             <Box display="flex" gap={1}>
               <Chip
-                label={documentsLoading ? 'Loading...' : `${Object.keys(driverDocuments?.documents || {}).length} Documents`}
+                label={documentsLoading ? 'Loading...' : (() => {
+                  // Count only documents that actually have URLs (uploaded documents)
+                  const docs = driverDocuments?.documents || {};
+                  const uploadedCount = Object.values(docs).filter((doc: any) => 
+                    doc && (doc.url || doc.downloadURL)
+                  ).length;
+                  return `${uploadedCount} Documents`;
+                })()}
                 color="primary"
                 variant="outlined"
               />

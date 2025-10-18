@@ -55,8 +55,10 @@ import {
   Assessment as AssessmentIcon,
   Settings as SettingsIcon,
   Close as CloseIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
+import { bookingService } from '../services/bookingService'
 
 // Modern Color Theme
 const theme = {
@@ -159,7 +161,10 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [newStatus, setNewStatus] = useState('')
+  const [deleteReason, setDeleteReason] = useState('')
+  const [isUpdating, setIsUpdating] = useState(false)
 
   // Enhanced UI states
   const [searchQuery, setSearchQuery] = useState('')
@@ -438,10 +443,13 @@ const ModernBookingManagement: React.FC = React.memo(() => {
     if (!selectedBooking || !newStatus) return
 
     try {
+      setIsUpdating(true)
       console.log('🔄 Updating booking status...', { bookingId: selectedBooking.id, status: newStatus })
       
-      // Here you would call the API to update booking status
-      // For now, we'll just update the local state
+      // Call the actual API to update booking status
+      await bookingService.updateBookingStatus(selectedBooking.id, newStatus)
+      
+      // Update local state after successful API call
       setBookings(prev => prev.map(booking => 
         booking.id === selectedBooking.id 
           ? { ...booking, status: newStatus as any, updatedAt: new Date().toISOString() }
@@ -454,16 +462,52 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       
       addNotification(`Booking status updated to ${newStatus}`, 'success')
       console.log('✅ Booking status updated successfully')
+      
+      // Refresh bookings to get latest data
+      setTimeout(() => fetchBookings(), 500)
     } catch (error) {
       console.error('❌ Error updating booking status:', error)
-      setError('Failed to update booking status')
+      addNotification('Failed to update booking status', 'error')
+    } finally {
+      setIsUpdating(false)
     }
-  }, [selectedBooking, newStatus])
+  }, [selectedBooking, newStatus, fetchBookings])
 
   // Handle page change
   // const handlePageChange = useCallback((_event: React.ChangeEvent<unknown>, page: number) => {
   //   setCurrentPage(page)
   // }, [])
+
+  // Handle delete booking
+  const handleDeleteBooking = useCallback(async (): Promise<void> => {
+    if (!selectedBooking) return
+
+    try {
+      setIsUpdating(true)
+      console.log('🗑️ Deleting booking...', { bookingId: selectedBooking.id })
+      
+      // Call the API to delete booking
+      await bookingService.deleteBooking(selectedBooking.id, deleteReason)
+      
+      // Remove from local state
+      setBookings(prev => prev.filter(booking => booking.id !== selectedBooking.id))
+      
+      setDeleteDialogOpen(false)
+      setSelectedBooking(null)
+      setDeleteReason('')
+      
+      addNotification('Booking deleted successfully', 'success')
+      console.log('✅ Booking deleted successfully')
+      
+      // Refresh bookings to get latest data
+      setTimeout(() => fetchBookings(), 500)
+    } catch (error) {
+      console.error('❌ Error deleting booking:', error)
+      addNotification('Failed to delete booking', 'error')
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [selectedBooking, deleteReason, fetchBookings])
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
@@ -1571,6 +1615,18 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                               <EditIcon />
                             </IconButton>
                           </Tooltip>
+                          <Tooltip title="Delete Booking">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setSelectedBooking(booking)
+                                setDeleteDialogOpen(true)
+                              }}
+                              sx={{ color: theme.error }}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </TableCell>
                     )}
@@ -1703,6 +1759,16 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                     sx={{ color: theme.warning }}
                   >
                     Edit Status
+                  </Button>
+                  <Button
+                    startIcon={<DeleteIcon />}
+                    onClick={() => {
+                      setSelectedBooking(booking)
+                      setDeleteDialogOpen(true)
+                    }}
+                    sx={{ color: theme.error }}
+                  >
+                    Delete
                   </Button>
                 </CardActions>
               </Card>
@@ -2050,10 +2116,68 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           <Button 
             variant="contained" 
             onClick={handleStatusUpdate}
-            disabled={!newStatus || newStatus === selectedBooking?.status}
+            disabled={!newStatus || newStatus === selectedBooking?.status || isUpdating}
             sx={{ background: theme.primary }}
           >
-            Update Status
+            {isUpdating ? 'Updating...' : 'Update Status'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !isUpdating && setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobileDialog}
+      >
+        <DialogTitle sx={{ background: theme.error, color: 'white' }}>
+          Delete Booking
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          {selectedBooking && (
+            <Box>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <AlertTitle>Warning</AlertTitle>
+                This action cannot be undone. The booking will be permanently deleted.
+              </Alert>
+              <Typography variant="body1" mb={2}>
+                Are you sure you want to delete booking #{selectedBooking.id.substring(0, 8)}?
+              </Typography>
+              <Typography variant="body2" color={theme.text.secondary} mb={2}>
+                Customer: {selectedBooking.customerName || 'Unknown'}
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Reason for deletion (optional)"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                margin="normal"
+                placeholder="Enter reason for deleting this booking..."
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setDeleteDialogOpen(false)
+              setDeleteReason('')
+            }}
+            disabled={isUpdating}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={handleDeleteBooking}
+            disabled={isUpdating}
+            sx={{ background: theme.error, '&:hover': { background: theme.error + 'dd' } }}
+          >
+            {isUpdating ? 'Deleting...' : 'Delete Booking'}
           </Button>
         </DialogActions>
       </Dialog>

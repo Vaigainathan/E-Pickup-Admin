@@ -286,6 +286,17 @@ class BookingService {
     }
     throw new Error(response.error?.message || 'Failed to fetch booking reports')
   }
+
+  async deleteBooking(bookingId: string, reason?: string): Promise<{ message: string }> {
+    const endpoint = reason 
+      ? `/admin/bookings/${bookingId}?reason=${encodeURIComponent(reason)}`
+      : `/admin/bookings/${bookingId}`
+    const response = await apiService.delete(endpoint)
+    if (response.success && response.data) {
+      return response.data as any
+    }
+    throw new Error(response.error?.message || 'Failed to delete booking')
+  }
 }
 
 export const bookingService = new BookingService()

@@ -48,6 +48,7 @@ import {
   SpeedDial,
   SpeedDialAction,
   SpeedDialIcon,
+ 
 } from '@mui/material'
 import {
   CheckCircle as CheckCircleIcon,
@@ -85,7 +86,10 @@ import {
   People as PeopleIcon,
   LocalShipping as DeliveryIcon,
   List as ListIcon,
-  BugReport as BugReportIcon
+  BugReport as BugReportIcon,
+  // Schedule as ScheduleIcon,
+  // History as HistoryIcon,
+  // AccessTime as AccessTimeIcon,
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { realTimeService } from '../services/realTimeService'
@@ -240,16 +244,12 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   
   // Core states
   const [isInitialized, setIsInitialized] = useState(false)
-  // const [isLoading, setIsLoading] = useState(true) // Removed unused variable
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
   const [isConnected, setIsConnected] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
-  const [rejectionReason, setRejectionReason] = useState<string>('')
-  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false)
-  const [currentDocumentType, setCurrentDocumentType] = useState<string>('')
 
   // Data states
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -260,7 +260,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
 
   // Loading states
   const [driversLoading, setDriversLoading] = useState(false)
-  const [verificationLoading, setVerificationLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   // UI states
@@ -287,21 +286,27 @@ const ModernDriverManagement: React.FC = React.memo(() => {
 
   // Dialog states
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null)
-  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
+  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false)
   const [documentsDialogOpen, setDocumentsDialogOpen] = useState(false)
-  // const [editDialogOpen, setEditDialogOpen] = useState(false) // Removed unused variables
-  // const [blockDialogOpen, setBlockDialogOpen] = useState(false) // Removed unused variables
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [banDialogOpen, setBanDialogOpen] = useState(false)
-  const [actionReason, setActionReason] = useState('')
+  const [verificationLoading, setVerificationLoading] = useState(false)
   const [verificationStatus, setVerificationStatus] = useState<'approved' | 'rejected'>('approved')
-  // const [blockReason, setBlockReason] = useState('') // Removed unused variables
-  
-  // Document states
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [actionReason, setActionReason] = useState('')
+  const [currentDocumentType, setCurrentDocumentType] = useState('')
   const [driverDocuments, setDriverDocuments] = useState<any>(null)
   const [documentsLoading, setDocumentsLoading] = useState(false)
   const [documentVerificationNotes, setDocumentVerificationNotes] = useState('')
+  
+  // New states for work slots and rejection history tabs (commented out until UI implementation)
+  // const [selectedTab, setSelectedTab] = useState(0)
+  // const [workSlots, setWorkSlots] = useState<any[]>([])
+  // const [rejectionHistory, setRejectionHistory] = useState<any[]>([])
+  // const [slotsLoading, setSlotsLoading] = useState(false)
+  // const [historyLoading, setHistoryLoading] = useState(false)
   
   // Actions menu state
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null)

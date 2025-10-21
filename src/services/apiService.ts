@@ -325,6 +325,54 @@ class ApiService {
       throw error
     }
   }
+
+  async logout() {
+    try {
+      const response = await this.request('/api/auth/logout', {
+        method: 'POST'
+      })
+      
+      this.clearToken()
+      return response
+    } catch (error) {
+      this.clearToken()
+      throw error
+    }
+  }
+
+  // ==================== DRIVER MANAGEMENT ====================
+
+  /**
+   * Get driver's work slots
+   */
+  async getDriverWorkSlots(driverId: string, date?: string, limit: number = 50) {
+    const params = new URLSearchParams()
+    if (date) params.append('date', date)
+    params.append('limit', limit.toString())
+    
+    const queryString = params.toString()
+    return this.request(`/api/admin/drivers/${driverId}/work-slots${queryString ? '?' + queryString : ''}`)
+  }
+
+  /**
+   * Get driver's booking rejection history
+   */
+  async getDriverRejectionHistory(
+    driverId: string, 
+    options?: { 
+      limit?: number
+      startDate?: string
+      endDate?: string
+    }
+  ) {
+    const params = new URLSearchParams()
+    if (options?.limit) params.append('limit', options.limit.toString())
+    if (options?.startDate) params.append('startDate', options.startDate)
+    if (options?.endDate) params.append('endDate', options.endDate)
+    
+    const queryString = params.toString()
+    return this.request(`/api/admin/drivers/${driverId}/rejection-history${queryString ? '?' + queryString : ''}`)
+  }
 }
 
 export const apiService = new ApiService()

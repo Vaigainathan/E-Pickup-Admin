@@ -142,6 +142,9 @@ interface Booking {
 }
 
 const ModernBookingManagement: React.FC = React.memo(() => {
+  // ✅ FIX: Define status options that match backend validation
+  const statusOptions = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled']
+  
   const [isInitialized, setIsInitialized] = useState(false)
   // const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -760,9 +763,6 @@ const ModernBookingManagement: React.FC = React.memo(() => {
     }
   }, [sortBy])
 
-  const statusOptions = [
-    'pending', 'accepted', 'in_progress', 'completed', 'cancelled'
-  ]
 
   if (!isInitialized) {
     return (

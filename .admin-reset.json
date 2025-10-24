@@ -1,0 +1,11 @@
+{
+  "lastReset": "2025-10-24T20:12:46.660Z",
+  "version": "1.0.0",
+  "cleanSlate": true,
+  "adminSettings": {
+    "theme": "light",
+    "language": "en",
+    "notifications": true,
+    "autoRefresh": true
+  }
+}

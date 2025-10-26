@@ -103,7 +103,6 @@ export interface Customer {
 // Booking Types
 export interface Booking {
   id: string
-  bookingId: string
   customerId: string
   driverId?: string
   customerInfo: {
@@ -117,29 +116,51 @@ export interface Booking {
     rating: number
   }
   driverVerified?: boolean
-  pickupLocation: {
+  pickup: {
+    name: string
+    phone: string
     address: string
-    latitude: number
-    longitude: number
+    coordinates: {
+      latitude: number
+      longitude: number
+    }
   }
-  dropoffLocation: {
+  dropoff: {
+    name: string
+    phone: string
     address: string
-    latitude: number
-    longitude: number
+    coordinates: {
+      latitude: number
+      longitude: number
+    }
   }
-  packageDetails: {
+  package: {
+    type: string
     weight: number
+    dimensions: {
+      length: number
+      width: number
+      height: number
+    }
     description: string
     value: number
   }
-  status: 'pending' | 'confirmed' | 'driver_assigned' | 'driver_enroute' | 
-          'driver_arrived' | 'picked_up' | 'in_transit' | 'at_dropoff' | 
-          'delivered' | 'cancelled'
-  fare: {
+  status: 'pending' | 'driver_assigned' | 'accepted' | 'driver_enroute' | 
+          'driver_arrived' | 'picked_up' | 'in_transit' | 'delivered' | 
+          'completed' | 'cancelled' | 'rejected'
+  pricing: {
     baseFare: number
     distanceFare: number
+    timeFare: number
     totalFare: number
     currency: string
+  }
+  // Legacy fare structure for backward compatibility
+  fare?: {
+    total: number
+    base: number
+    distance: number
+    time: number
   }
   paymentStatus: 'pending' | 'completed' | 'failed' | 'refunded'
   estimatedDuration?: number

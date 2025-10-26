@@ -1621,8 +1621,8 @@ class ComprehensiveAdminService {
     try {
       console.log(`📄 Fetching documents for driver: ${driverId}`)
       
-      // Get driver document from Firestore
-      const driverDoc = await getDoc(doc(db, 'drivers', driverId))
+      // ✅ CRITICAL FIX: Get driver document from correct collection (users, not drivers)
+      const driverDoc = await getDoc(doc(db, 'users', driverId))
       if (!driverDoc.exists()) {
         return {
           success: false,
@@ -1636,21 +1636,19 @@ class ComprehensiveAdminService {
       const driverData = driverDoc.data()
       const documents: any = {}
       
-      // Define expected document types and their folder structures
+      // ✅ CRITICAL FIX: Define document types matching backend structure
       const documentTypes = [
-        { type: 'license', folder: 'license', patterns: ['license', 'driving', 'dl'] },
-        { type: 'insurance', folder: 'insurance', patterns: ['insurance', 'policy', 'coverage'] },
-        { type: 'registration', folder: 'registration', patterns: ['registration', 'rc', 'vehicle'] },
-        { type: 'identity', folder: 'identity', patterns: ['identity', 'id', 'aadhar', 'pan'] },
-        { type: 'vehicle', folder: 'vehicle', patterns: ['vehicle', 'car', 'bike'] },
-        { type: 'medical', folder: 'medical', patterns: ['medical', 'health', 'fitness'] },
-        { type: 'background', folder: 'background', patterns: ['background', 'police', 'verification'] }
+        { type: 'drivingLicense', folder: 'driving_license', patterns: ['driving_license', 'license', 'driving', 'dl'] },
+        { type: 'bikeInsurance', folder: 'bike_insurance', patterns: ['bike_insurance', 'insurance', 'policy', 'coverage'] },
+        { type: 'rcBook', folder: 'rc_book', patterns: ['rc_book', 'registration', 'rc', 'vehicle'] },
+        { type: 'aadhaarCard', folder: 'aadhaar_card', patterns: ['aadhaar_card', 'identity', 'id', 'aadhar', 'pan'] },
+        { type: 'profilePhoto', folder: 'profile_photo', patterns: ['profile_photo', 'profile', 'photo', 'picture'] }
       ]
       
       // Check each document type folder
       for (const docType of documentTypes) {
         try {
-          const docTypeRef = ref(storage, `drivers/${driverId}/${docType.folder}`)
+          const docTypeRef = ref(storage, `drivers/${driverId}/documents/${docType.folder}`)
           const listResult = await listAll(docTypeRef)
           
           if (listResult.items.length > 0) {
@@ -1668,9 +1666,9 @@ class ComprehensiveAdminService {
               uploadedAt: metadata.timeCreated,
               size: metadata.size,
               contentType: metadata.contentType,
-              status: driverData?.documents?.[docType.type]?.status || 'pending',
-              verified: driverData?.documents?.[docType.type]?.verified || false,
-              verificationNotes: driverData?.documents?.[docType.type]?.verificationNotes || '',
+              status: driverData?.driver?.documents?.[docType.type]?.status || driverData?.documents?.[docType.type]?.status || 'pending',
+              verified: driverData?.driver?.documents?.[docType.type]?.verified || driverData?.documents?.[docType.type]?.verified || false,
+              verificationNotes: driverData?.driver?.documents?.[docType.type]?.verificationNotes || driverData?.documents?.[docType.type]?.verificationNotes || '',
               folder: docType.folder,
               allVersions: listResult.items.map(item => ({
                 name: item.name,
@@ -1683,9 +1681,12 @@ class ComprehensiveAdminService {
         }
       }
       
-      // Also check the legacy documents folder for backward compatibility
+      // ✅ CRITICAL FIX: Only check the correct storage path (no legacy needed)
+      const correctPath = `drivers/${driverId}/documents`;
+      
       try {
-        const legacyDocumentsRef = ref(storage, `drivers/${driverId}/documents`)
+        console.log(`🔍 Checking correct path: ${correctPath}`);
+        const legacyDocumentsRef = ref(storage, correctPath)
         const legacyListResult = await listAll(legacyDocumentsRef)
         
         for (const itemRef of legacyListResult.items) {
@@ -1712,16 +1713,19 @@ class ComprehensiveAdminService {
               uploadedAt: metadata.timeCreated,
               size: metadata.size,
               contentType: metadata.contentType,
-              status: driverData?.documents?.[docType]?.status || 'pending',
-              verified: driverData?.documents?.[docType]?.verified || false,
-              verificationNotes: driverData?.documents?.[docType]?.verificationNotes || '',
+              status: driverData?.driver?.documents?.[docType]?.status || driverData?.documents?.[docType]?.status || 'pending',
+              verified: driverData?.driver?.documents?.[docType]?.verified || driverData?.documents?.[docType]?.verified || false,
+              verificationNotes: driverData?.driver?.documents?.[docType]?.verificationNotes || driverData?.documents?.[docType]?.verificationNotes || '',
               folder: 'documents',
-              isLegacy: true
+              isLegacy: false,
+              sourcePath: correctPath
             }
           }
         }
-      } catch (legacyError) {
-        console.log('⚠️ No legacy documents folder found')
+        
+        console.log(`✅ Found ${legacyListResult.items.length} documents in correct path: ${correctPath}`);
+      } catch (pathError) {
+        console.log(`⚠️ No documents found in correct path: ${correctPath}`);
       }
       
       // Fallback to Firestore document data if no storage documents found
@@ -2068,15 +2072,7 @@ class ComprehensiveAdminService {
         'files', 'attachments', 'proofs', 'certificates'
       ]
       
-      // Also check the legacy driver-documents path
-      const legacyPaths = [
-        `driver-documents/${driverId}`,
-        `driver-documents/${driverId}/documents`,
-        `driver-documents/${driverId}/license`,
-        `driver-documents/${driverId}/insurance`,
-        `driver-documents/${driverId}/registration`,
-        `driver-documents/${driverId}/identity`
-      ]
+      // ✅ CRITICAL FIX: No legacy paths needed - only use correct structure
       
       // Check each possible folder
       for (const folder of possibleFolders) {
@@ -2119,48 +2115,7 @@ class ComprehensiveAdminService {
         }
       }
       
-      // Check legacy driver-documents paths
-      for (const legacyPath of legacyPaths) {
-        try {
-          const legacyRef = ref(storage, legacyPath)
-          const legacyListResult = await listAll(legacyRef)
-          
-          if (legacyListResult.items.length > 0) {
-            const folderName = legacyPath.split('/').pop() || 'legacy'
-            folderStructure[folderName] = legacyListResult.items.length
-            
-            for (const itemRef of legacyListResult.items) {
-              const fileName = itemRef.name
-              const downloadURL = await getDownloadURL(itemRef)
-              const metadata = await getMetadata(itemRef)
-              
-              // Determine document type from filename and folder
-              let docType = this.determineDocumentType(fileName, folderName)
-              
-              // Create unique key for multiple documents of same type
-              const docKey = allDocuments[docType] ? `${docType}_${Date.now()}` : docType
-              
-              allDocuments[docKey] = {
-                url: downloadURL,
-                fileName: fileName,
-                uploadedAt: metadata.timeCreated,
-                size: metadata.size,
-                contentType: metadata.contentType,
-                folder: folderName,
-                fullPath: itemRef.fullPath,
-                status: driverData?.documents?.[docType]?.status || 'pending',
-                verified: driverData?.documents?.[docType]?.verified || false,
-                verificationNotes: driverData?.documents?.[docType]?.verificationNotes || '',
-                documentType: docType,
-                isLegacy: true
-              }
-            }
-          }
-        } catch (legacyError) {
-          // Legacy path doesn't exist or is empty, continue
-          console.log(`📁 Legacy path ${legacyPath} not found or empty for driver ${driverId}`)
-        }
-      }
+      // ✅ CRITICAL FIX: Legacy path checks removed - only use correct structure
       
       // Also check for any files directly in the driver folder
       try {
@@ -2388,3 +2343,4 @@ class ComprehensiveAdminService {
 
 export const comprehensiveAdminService = new ComprehensiveAdminService()
 export default comprehensiveAdminService
+

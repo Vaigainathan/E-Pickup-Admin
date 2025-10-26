@@ -16,13 +16,14 @@ class BookingService {
     pagination: PaginationParams,
     filters: FilterParams = {}
   ): Promise<BookingsResponse> {
+    // ✅ CRITICAL FIX: Use correct backend endpoint
     const params = {
       page: pagination.page,
       limit: pagination.limit,
       ...filters
     }
     
-    const response = await apiService.get('/admin/bookings', params)
+    const response = await apiService.get('/api/admin/bookings', params)
     if (response.success && response.data) {
       return response.data as BookingsResponse
     }
@@ -30,7 +31,8 @@ class BookingService {
   }
 
   async getActiveBookings(): Promise<Booking[]> {
-    const response = await apiService.get('/admin/bookings/active')
+    // ✅ CRITICAL FIX: Use correct backend endpoint
+    const response = await apiService.get('/api/admin/bookings/active')
     if (response.success && response.data) {
       return response.data as Booking[]
     }
@@ -38,7 +40,8 @@ class BookingService {
   }
 
   async getBookingById(bookingId: string): Promise<Booking> {
-    const response = await apiService.get(`/admin/bookings/${bookingId}`)
+    // ✅ CRITICAL FIX: Use correct backend endpoint
+    const response = await apiService.get(`/api/admin/bookings/${bookingId}`)
     if (response.success && response.data) {
       return response.data as Booking
     }
@@ -46,7 +49,8 @@ class BookingService {
   }
 
   async updateBookingStatus(bookingId: string, status: string): Promise<{ status: string; message: string }> {
-    const response = await apiService.put(`/admin/bookings/${bookingId}/status`, { status })
+    // ✅ CRITICAL FIX: Use correct backend endpoint
+    const response = await apiService.put(`/api/admin/bookings/${bookingId}/status`, { status })
     if (response.success && response.data) {
       return response.data as any
     }
@@ -58,7 +62,8 @@ class BookingService {
     action: string,
     reason?: string
   ): Promise<{ action: string; message: string }> {
-    const response = await apiService.post(`/admin/bookings/${bookingId}/intervene`, {
+    // ✅ CRITICAL FIX: Use correct backend endpoint
+    const response = await apiService.post(`/api/admin/bookings/${bookingId}/intervene`, {
       action,
       reason,
     })
@@ -152,9 +157,10 @@ class BookingService {
   }
 
   async deleteBooking(bookingId: string, reason?: string): Promise<{ message: string }> {
+    // ✅ CRITICAL FIX: Use correct backend endpoint
     const endpoint = reason 
-      ? `/admin/bookings/${bookingId}?reason=${encodeURIComponent(reason)}`
-      : `/admin/bookings/${bookingId}`
+      ? `/api/bookings/${bookingId}?reason=${encodeURIComponent(reason)}`
+      : `/api/bookings/${bookingId}`
     const response = await apiService.delete(endpoint)
     if (response.success && response.data) {
       return response.data as any

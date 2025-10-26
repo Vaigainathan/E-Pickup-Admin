@@ -142,8 +142,8 @@ interface Booking {
 }
 
 const ModernBookingManagement: React.FC = React.memo(() => {
-  // ✅ FIX: Define status options that match backend validation
-  const statusOptions = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled']
+  // ✅ UNIFIED STATUS DEFINITION: Match backend exactly
+  const statusOptions = ['pending', 'driver_assigned', 'accepted', 'driver_enroute', 'driver_arrived', 'picked_up', 'in_transit', 'delivered', 'completed', 'cancelled', 'rejected']
   
   const [isInitialized, setIsInitialized] = useState(false)
   // const [isLoading, setIsLoading] = useState(true)
@@ -521,10 +521,16 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'pending': return theme.warning
-      case 'accepted': return theme.info
-      case 'in_progress': return theme.primary
+      case 'driver_assigned': return theme.info
+      case 'accepted': return theme.primary
+      case 'driver_enroute': return theme.primary
+      case 'driver_arrived': return theme.primary
+      case 'picked_up': return theme.primary
+      case 'in_transit': return theme.primary
+      case 'delivered': return theme.success
       case 'completed': return theme.success
       case 'cancelled': return theme.error
+      case 'rejected': return theme.error
       case 'unknown': return theme.text.disabled
       default: return theme.text.disabled
     }

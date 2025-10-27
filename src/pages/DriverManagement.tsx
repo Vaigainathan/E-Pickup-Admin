@@ -1270,7 +1270,12 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         
         if (response.success && response.data) {
           console.log('🔍 Debug information:', response.data)
-          alert(`Debug info logged to console. Check browser console for details.\n\nDriver: ${response.data.driverName}\nVerification Status: ${response.data.verificationStatus}\nUser Documents: ${Object.keys(response.data.userCollectionDocuments).length} found\nVerification Requests: ${response.data.verificationRequests.length} found\nDriver Documents: ${response.data.driverDocumentsCollection.length} found`)
+          
+          // Show deduplicated count (actual documents)
+          const deduplicatedCount = Object.keys(response.data.userCollectionDocuments || {}).length
+          const rawCount = Object.keys(response.data.userCollectionDocumentsRaw || {}).length
+          
+          alert(`Debug info logged to console. Check browser console for details.\n\nDriver: ${response.data.driverName}\nVerification Status: ${response.data.verificationStatus}\nUser Documents: ${deduplicatedCount} found${rawCount > deduplicatedCount ? ` (${rawCount} raw keys)` : ''}\nVerification Requests: ${response.data.verificationRequests.length} found\nDriver Documents Collection: ${response.data.driverDocumentsCollection.length} found`)
         } else {
           console.error('❌ Debug failed:', response.error)
           setError(response.error?.message || 'Debug failed')

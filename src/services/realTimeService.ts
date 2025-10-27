@@ -50,7 +50,7 @@ class RealTimeService {
         return
       }
 
-      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://epickup-backend.onrender.com'
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://epickupbackend-production.up.railway.app'
       
       console.log('🔌 Connecting to WebSocket...', socketUrl)
       console.log('🔑 Token available:', this.token ? 'Yes' : 'No')
@@ -309,7 +309,7 @@ class RealTimeService {
   // Method to handle token refresh
   async refreshToken(): Promise<void> {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://epickup-backend.onrender.com'}/api/auth/refresh`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://epickupbackend-production.up.railway.app'}/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

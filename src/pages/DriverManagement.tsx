@@ -62,8 +62,6 @@ import {
   Warning as WarningIcon,
   MoreVert as MoreVertIcon,
   Description as DescriptionIcon,
-  ThumbUp as ThumbUpIcon,
-  ThumbDown as ThumbDownIcon,
   Search as SearchIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
@@ -287,13 +285,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   // Dialog states
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
-  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false)
   const [documentsDialogOpen, setDocumentsDialogOpen] = useState(false)
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [banDialogOpen, setBanDialogOpen] = useState(false)
-  const [verificationLoading, setVerificationLoading] = useState(false)
-  const [verificationStatus, setVerificationStatus] = useState<'approved' | 'rejected'>('approved')
   const [rejectionReason, setRejectionReason] = useState('')
   const [actionReason, setActionReason] = useState('')
   const [currentDocumentType, setCurrentDocumentType] = useState('')
@@ -665,46 +660,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
     setCurrentPage(1)
   }, [debouncedSearchQuery, statusFilter, verificationFilter, vehicleTypeFilter, ratingFilter])
 
-  // Handle driver verification
-  const handleVerifyDriver = useCallback(async () => {
-    if (!selectedDriver) return
-
-    try {
-      setVerificationLoading(true)
-      console.log('🔄 Verifying driver...', { driverId: selectedDriver.id, status: verificationStatus })
-      
-      let response
-      if (verificationStatus === 'approved') {
-        response = await comprehensiveAdminService.approveDriver(
-          selectedDriver.id,
-          'Driver approved by admin'
-        )
-      } else {
-        response = await comprehensiveAdminService.rejectDriver(
-          selectedDriver.id,
-          rejectionReason || 'Driver rejected by admin'
-        )
-      }
-      
-      if (response.success) {
-        console.log('✅ Driver verification successful')
-        setVerifyDialogOpen(false)
-        setSelectedDriver(null)
-        setRejectionReason('')
-        
-        // Refresh drivers data
-        await fetchDrivers()
-      } else {
-        console.error('❌ Failed to verify driver:', response.error)
-        setError('Failed to verify driver')
-      }
-    } catch (error) {
-      console.error('❌ Error verifying driver:', error)
-      setError('Failed to verify driver')
-    } finally {
-      setVerificationLoading(false)
-    }
-  }, [selectedDriver, verificationStatus, rejectionReason, fetchDrivers])
+  // REMOVED: handleVerifyDriver - No longer used, document verification is handled by handleVerifyDocument
 
   // Handle page change
   const handlePageChange = useCallback((_event: React.ChangeEvent<unknown>, page: number) => {
@@ -1502,22 +1458,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
     setCurrentDocumentType(documentType)
     setRejectionDialogOpen(true)
   }, [])
-
-  const handleApproveDriver = useCallback(() => {
-    if (selectedDriver) {
-      setVerificationStatus('approved')
-      setVerifyDialogOpen(true)
-      handleCloseActions()
-    }
-  }, [selectedDriver, handleCloseActions])
-
-  const handleRejectDriver = useCallback(() => {
-    if (selectedDriver) {
-      setVerificationStatus('rejected')
-      setVerifyDialogOpen(true)
-      handleCloseActions()
-    }
-  }, [selectedDriver, handleCloseActions])
 
   // Error boundary for better error handling
   if (error && retryCount >= 3) {
@@ -2420,51 +2360,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         />
       </SpeedDial>
 
-      {/* Verification Dialog */}
-      <Dialog open={verifyDialogOpen} onClose={() => setVerifyDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
-        <DialogTitle>
-          {verificationStatus === 'approved' ? 'Approve Driver' : 'Reject Driver'}
-        </DialogTitle>
-        <DialogContent>
-          {selectedDriver && (
-            <Box>
-              <Typography variant="body1" mb={2}>
-                Driver: {selectedDriver.personalInfo?.name || selectedDriver.name || 'Unknown'}
-              </Typography>
-              <Typography variant="body1" mb={2}>
-                Phone: {selectedDriver.personalInfo?.phone || 'N/A'}
-              </Typography>
-              <Typography variant="body1" mb={2}>
-                Documents: {getDocumentStatus(selectedDriver.documents)}
-              </Typography>
-              
-              {verificationStatus === 'rejected' && (
-                <TextField
-                  fullWidth
-                  label="Rejection Reason"
-                  multiline
-                  rows={3}
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  margin="normal"
-                  required
-                />
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setVerifyDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleVerifyDriver}
-            variant="contained"
-            color={verificationStatus === 'approved' ? 'success' : 'error'}
-            disabled={verificationLoading || (verificationStatus === 'rejected' && !rejectionReason.trim())}
-          >
-            {verificationLoading ? <CircularProgress size={20} /> : (verificationStatus === 'approved' ? 'Approve' : 'Reject')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* REMOVED: Verification Dialog - No longer used. Document verification happens individually in the View Documents modal */}
 
       {/* Rejection Reason Dialog */}
       <Dialog
@@ -2750,25 +2646,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               />
             </MenuItem>
             <Divider sx={{ my: 0.5 }} />
-          <MenuItem onClick={handleApproveDriver}>
-            <ListItemIcon>
-              <ThumbUpIcon fontSize="small" color="success" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Approve Driver" 
-              primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
-            />
-          </MenuItem>
-          <MenuItem onClick={handleRejectDriver}>
-            <ListItemIcon>
-              <ThumbDownIcon fontSize="small" color="error" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Reject Driver" 
-              primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
-            />
-          </MenuItem>
-          <Divider sx={{ my: 0.5 }} />
           <MenuItem onClick={handleBanDriver} sx={{ color: 'error.main' }}>
             <ListItemIcon>
               <BlockIcon fontSize="small" color="error" />

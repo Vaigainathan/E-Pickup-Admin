@@ -2496,18 +2496,20 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom>Document Status</Typography>
                 <Grid container spacing={2}>
-                  {selectedDriver.documents && Object.entries(selectedDriver.documents).map(([type, doc]: [string, any]) => (
-                    <Grid item xs={12} sm={6} md={4} key={type}>
+                  {selectedDriver.documents && Object.entries(selectedDriver.documents)
+                    .filter(([, doc]: [string, any]) => doc !== null && doc !== undefined && (doc.url || doc.downloadURL))
+                    .map(([docType, doc]: [string, any]) => (
+                    <Grid item xs={12} sm={6} md={4} key={docType}>
                       <Card variant="outlined">
                         <CardContent>
                           <Typography variant="subtitle2" gutterBottom>
-                            {type.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase())}
+                            {docType.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase())}
                           </Typography>
                           {doc?.url ? (
                             doc.url.match(/\.(png|jpe?g|gif|webp)$/i) ? (
                               <img 
                                 src={doc.url} 
-                                alt={type} 
+                                alt={docType} 
                                 style={{ maxWidth: '100%', maxHeight: '150px', borderRadius: 8, marginBottom: 8 }} 
                               />
                             ) : (
@@ -2814,8 +2816,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
 
               {/* Documents Grid */}
               <Grid container spacing={3}>
-                {Object.entries(driverDocuments.documents).map(([key, doc]: [string, any]) => (
-                  <Grid item xs={12} sm={6} md={4} key={key}>
+                {Object.entries(driverDocuments.documents)
+                  .filter(([, doc]: [string, any]) => doc !== null && doc !== undefined && (doc.url || doc.downloadURL))
+                  .map(([docKey, doc]: [string, any]) => (
+                    <Grid item xs={12} sm={6} md={4} key={docKey}>
                     <Card 
                       variant="outlined"
                       sx={{

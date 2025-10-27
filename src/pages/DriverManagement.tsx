@@ -420,8 +420,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             // Check multiple verification status indicators
             const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
             
-            // Check if all required documents are verified
-            const documents = driver?.documents || {}
+            // Check if all required documents are verified - read from multiple possible locations
+            const documents = driver?.documents || driver?.driver?.documents || {}
             const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
@@ -461,7 +461,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
           })(),
           status: (() => {
             const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
-            const documents = driver?.documents || {}
+            // Check if all required documents are verified - read from multiple possible locations
+            const documents = driver?.documents || driver?.driver?.documents || {}
             const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
@@ -501,7 +502,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             thisMonth: Math.max(0, driver?.earnings?.thisMonth || 0),
             lastMonth: Math.max(0, driver?.earnings?.lastMonth || 0)
           },
-          documents: driver?.documents || {},
+          // CRITICAL FIX: Read documents from multiple possible locations
+          documents: driver?.documents || driver?.driver?.documents || {},
           createdAt: driver?.createdAt || new Date().toISOString()
         }))
         

@@ -419,7 +419,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
           isVerified: (() => {
             // Check multiple verification status indicators
             const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
-            const userIsVerified = driver?.driver?.isVerified || driver?.isVerified
             
             // Check if all required documents are verified
             const documents = driver?.documents || {}
@@ -440,23 +439,17 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               }
             })
             
-            // CRITICAL FIX: Driver is verified ONLY if:
-            // 1. Explicitly marked as verified/approved (not pending_verification)
-            // 2. AND all documents are verified
-            // 3. Exclude 'pending_verification' status - that means waiting for admin review
+            // CRITICAL FIX: Simplified logic - if all docs are verified, driver is verified
             const allDocsVerified = totalDocs > 0 && verifiedDocs === totalDocs
-            const isExplicitlyVerified = (driverVerificationStatus === 'verified' || 
-                                         driverVerificationStatus === 'approved') && 
-                                         driverVerificationStatus !== 'pending_verification' &&
-                                         driverVerificationStatus !== 'pending'
+            const isExplicitlyVerified = driverVerificationStatus === 'verified' || 
+                                         driverVerificationStatus === 'approved'
             
-            // Final verification: Must be explicitly verified AND all docs verified
-            const finalIsVerified = isExplicitlyVerified && allDocsVerified
+            // Final verification: Either explicitly verified OR all docs verified
+            const finalIsVerified = isExplicitlyVerified || allDocsVerified
             
             console.log('🔍 Verification status calculation:', {
               driverId: driver?.id,
               driverVerificationStatus,
-              userIsVerified,
               verifiedDocs,
               totalDocs,
               allDocsVerified,

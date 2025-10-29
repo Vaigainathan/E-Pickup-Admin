@@ -123,6 +123,10 @@ const analyticsSlice = createSlice({
       // Fetch Driver Analytics
       .addCase(fetchDriverAnalytics.fulfilled, (state, action) => {
         if (state.data) {
+          // ✅ FIX: Initialize users object if it doesn't exist
+          if (!state.data.users) {
+            state.data.users = { total: 0, drivers: 0, customers: 0, growth: 0 }
+          }
           state.data.users = { ...state.data.users, drivers: action.payload }
         }
       })
@@ -130,11 +134,19 @@ const analyticsSlice = createSlice({
       .addCase(fetchBookingAnalytics.fulfilled, (state, action) => {
         if (state.data) {
           state.data.bookings = action.payload
+          // ✅ FIX: Initialize trends object if it doesn't exist
+          if (!state.data.trends) {
+            state.data.trends = { bookings: [], revenue: [], drivers: [] }
+          }
         }
       })
       // Fetch Revenue Analytics
       .addCase(fetchRevenueAnalytics.fulfilled, (state, action) => {
         if (state.data) {
+          // ✅ FIX: Initialize trends object if it doesn't exist
+          if (!state.data.trends) {
+            state.data.trends = { bookings: [], revenue: [], drivers: [] }
+          }
           state.data.trends.revenue = action.payload
         }
       })

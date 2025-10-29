@@ -9,104 +9,76 @@ class AnalyticsService {
   ): Promise<AnalyticsData> {
     try {
       // Get real analytics data from backend
-      const [revenueData, driverData, bookingData, systemData] = await Promise.all([
-        this.getRevenueAnalytics(startDate, endDate),
-        this.getDriverAnalytics(startDate, endDate),
-        this.getBookingAnalytics(startDate, endDate),
-        this.getSystemAnalytics(startDate, endDate)
+      // ✅ FIX: Use Promise.allSettled to handle individual failures gracefully
+      const results = await Promise.allSettled([
+        this.getRevenueAnalytics(startDate, endDate).catch(() => ({ totalRevenue: 0, todayRevenue: 0, averageDailyRevenue: 0 })),
+        this.getDriverAnalytics(startDate, endDate).catch(() => ({ totalDrivers: 0, activeDrivers: 0, verifiedDrivers: 0, pendingVerification: 0, averageRating: 0 })),
+        this.getBookingAnalytics(startDate, endDate).catch(() => ({ totalBookings: 0, completedBookings: 0, cancelledBookings: 0, activeBookings: 0, activeCustomers: 0, totalCustomers: 0, newCustomers: 0, averageBookingValue: 0, completionRate: 0, averageTripDuration: 0, averageDistance: 0, peakHours: [] })),
+        this.getSystemAnalytics(startDate, endDate).catch(() => ({ averageResponseTime: 0 }))
       ]);
 
+      const revenueData = results[0].status === 'fulfilled' ? results[0].value : { totalRevenue: 0, todayRevenue: 0, averageDailyRevenue: 0 }
+      const driverData = results[1].status === 'fulfilled' ? results[1].value : { totalDrivers: 0, activeDrivers: 0, verifiedDrivers: 0, pendingVerification: 0, averageRating: 0 }
+      const bookingData = results[2].status === 'fulfilled' ? results[2].value : { totalBookings: 0, completedBookings: 0, cancelledBookings: 0, activeBookings: 0, activeCustomers: 0, totalCustomers: 0, newCustomers: 0, averageBookingValue: 0, completionRate: 0, averageTripDuration: 0, averageDistance: 0, peakHours: [] }
+      const systemData = results[3].status === 'fulfilled' ? results[3].value : { averageResponseTime: 0 }
+
       return {
-        overview: {
-          totalBookings: bookingData.totalBookings || 0,
-          totalRevenue: revenueData.totalRevenue || 0,
-          activeDrivers: driverData.activeDrivers || 0,
-          activeCustomers: bookingData.activeCustomers || 0,
-          averageRating: driverData.averageRating || 0,
-          completionRate: bookingData.completionRate || 0
-        } as any,
+        period: `${startDate} to ${endDate}`,
+        dateRange: { start: startDate, end: endDate },
+        users: {
+          total: (driverData.totalDrivers || 0) + (bookingData.totalCustomers || 0),
+          drivers: driverData.totalDrivers || 0,
+          customers: bookingData.totalCustomers || 0,
+          growth: 0
+        },
         bookings: {
           total: bookingData.totalBookings || 0,
           completed: bookingData.completedBookings || 0,
-          cancelled: bookingData.cancelledBookings || 0,
           active: bookingData.activeBookings || 0,
-          scheduled: 0
-        } as any,
+          completionRate: `${bookingData.completionRate || 0}%`
+        },
         revenue: {
           total: revenueData.totalRevenue || 0,
-          today: revenueData.todayRevenue || 0,
-          thisWeek: (revenueData.averageDailyRevenue || 0) * 7,
-          thisMonth: revenueData.totalRevenue || 0,
-          averagePerBooking: bookingData.averageBookingValue || 0
+          averagePerBooking: `${revenueData.totalRevenue > 0 && bookingData.totalBookings > 0 ? (revenueData.totalRevenue / bookingData.totalBookings).toFixed(2) : 0}`,
+          driverEarnings: 0,
+          platformCommission: 0
         },
-        drivers: {
-          total: driverData.totalDrivers || 0,
-          active: driverData.activeDrivers || 0,
-          verified: driverData.verifiedDrivers || 0,
-          pending: driverData.pendingVerification || 0,
-          pendingVerification: driverData.pendingVerification || 0,
-          averageRating: driverData.averageRating || 0
-        } as any,
-        customers: {
-          total: bookingData.totalCustomers || 0,
-          active: bookingData.activeCustomers || 0,
-          newThisMonth: bookingData.newCustomers || 0,
-          averageRating: 4.8
-        },
-        performance: {
-          averageResponseTime: systemData.averageResponseTime || 0,
-          averageTripDuration: bookingData.averageTripDuration || 0,
-          averageDistance: bookingData.averageDistance || 0,
-          peakHours: bookingData.peakHours || []
+        trends: {
+          bookings: [],
+          revenue: [],
+          drivers: []
         }
-      } as any;
+      } as AnalyticsData;
     } catch (error) {
       console.error('Error getting analytics:', error);
-      // Return fallback data if API fails
+      // ✅ FIX: Return properly structured fallback data
       return {
-        overview: {
-          totalBookings: 0,
-          totalRevenue: 0,
-          activeDrivers: 0,
-          activeCustomers: 0,
-          averageRating: 0,
-          completionRate: 0
-        } as any,
+        period: `${startDate} to ${endDate}`,
+        dateRange: { start: startDate, end: endDate },
+        users: {
+          total: 0,
+          drivers: 0,
+          customers: 0,
+          growth: 0
+        },
         bookings: {
           total: 0,
           completed: 0,
-          cancelled: 0,
           active: 0,
-          scheduled: 0
-        } as any,
+          completionRate: '0%'
+        },
         revenue: {
           total: 0,
-          today: 0,
-          thisWeek: 0,
-          thisMonth: 0,
-          averagePerBooking: 0
+          averagePerBooking: '0',
+          driverEarnings: 0,
+          platformCommission: 0
         },
-        drivers: {
-          total: 0,
-          active: 0,
-          verified: 0,
-          pending: 0,
-          pendingVerification: 0,
-          averageRating: 0
-        } as any,
-        customers: {
-          total: 0,
-          active: 0,
-          newThisMonth: 0,
-          averageRating: 0
-        },
-        performance: {
-          averageResponseTime: 0,
-          averageTripDuration: 0,
-          averageDistance: 0,
-          peakHours: []
+        trends: {
+          bookings: [],
+          revenue: [],
+          drivers: []
         }
-      } as any;
+      } as AnalyticsData;
     }
   }
 

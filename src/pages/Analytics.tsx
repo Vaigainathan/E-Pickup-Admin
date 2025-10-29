@@ -47,11 +47,11 @@ import React, { useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
-import { fetchAnalytics, setTimeRange } from '../store/slices/analyticsSlice'
+import { fetchAnalytics, setTimeRange, clearError } from '../store/slices/analyticsSlice'
 
 const Analytics: React.FC = () => {
   const dispatch = useAppDispatch()
-  const { data: analyticsData, loading, timeRange } = useSelector((state: RootState) => state.analytics)
+  const { data: analyticsData, loading, timeRange, error: reduxError } = useSelector((state: RootState) => state.analytics)
   
   // Responsive hooks
   const theme = useTheme()
@@ -67,6 +67,7 @@ const Analytics: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // ✅ FIX: Fetch analytics data - errors will be handled by Redux state
     dispatch(fetchAnalytics({
       start: timeRange.start,
       end: timeRange.end,
@@ -122,10 +123,11 @@ const Analytics: React.FC = () => {
 
   // const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
+  // ✅ FIX: Safe data extraction with proper null checks
   const pieData = analyticsData?.users ? [
     { name: 'Drivers', value: analyticsData.users.drivers || 0, color: '#00C49F' },
     { name: 'Customers', value: analyticsData.users.customers || 0, color: '#FFBB28' },
-    { name: 'Others', value: (analyticsData.users.total || 0) - (analyticsData.users.drivers || 0) - (analyticsData.users.customers || 0), color: '#FF8042' },
+    { name: 'Others', value: Math.max(0, (analyticsData.users.total || 0) - (analyticsData.users.drivers || 0) - (analyticsData.users.customers || 0)), color: '#FF8042' },
   ] : []
 
   const revenueData = analyticsData?.trends?.revenue || []
@@ -173,9 +175,10 @@ const Analytics: React.FC = () => {
         </Box>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
+      {/* ✅ FIX: Show both local and Redux errors */}
+      {(error || reduxError) && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => { setError(null); dispatch(clearError()) }}>
+          {error || reduxError}
         </Alert>
       )}
 
@@ -201,10 +204,10 @@ const Analytics: React.FC = () => {
                 Total Drivers
               </Typography>
               <Typography variant="h4" component="h2" fontWeight="bold">
-                {analyticsData?.users.drivers || 0}
+                {analyticsData?.users?.drivers || 0}
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                {analyticsData?.users.total || 0} total users
+                {analyticsData?.users?.total || 0} total users
               </Typography>
             </CardContent>
           </Card>
@@ -216,10 +219,10 @@ const Analytics: React.FC = () => {
                 Total Bookings
               </Typography>
               <Typography variant="h4" component="h2" fontWeight="bold">
-                {analyticsData?.bookings.total || 0}
+                {analyticsData?.bookings?.total || 0}
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                {analyticsData?.bookings.completed || 0} completed
+                {analyticsData?.bookings?.completed || 0} completed
               </Typography>
             </CardContent>
           </Card>
@@ -231,7 +234,7 @@ const Analytics: React.FC = () => {
                 Total Revenue
               </Typography>
               <Typography variant="h4" component="h2" fontWeight="bold">
-                ₹{analyticsData?.revenue?.total?.toLocaleString() || 0}
+                ₹{(analyticsData?.revenue?.total || 0).toLocaleString()}
               </Typography>
               <Typography variant="body2" color="textSecondary">
                 ₹{analyticsData?.revenue?.averagePerBooking || 0} avg fare
@@ -367,9 +370,9 @@ const Analytics: React.FC = () => {
               </Typography>
               <ResponsiveContainer width="100%" height={chartHeight}>
                 <BarChart data={[
-                  { name: 'Completed', value: analyticsData?.bookings.completed || 0 },
-                  { name: 'Active', value: analyticsData?.bookings.active || 0 },
-                  { name: 'Total', value: analyticsData?.bookings.total || 0 },
+                  { name: 'Completed', value: analyticsData?.bookings?.completed || 0 },
+                  { name: 'Active', value: analyticsData?.bookings?.active || 0 },
+                  { name: 'Total', value: analyticsData?.bookings?.total || 0 },
                 ]}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 

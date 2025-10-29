@@ -13,6 +13,8 @@ interface RealTimeEventHandlers {
   onBookingStatusChange?: (status: any) => void
   onETAUpdate?: (eta: any) => void
   onSupportTicket?: (ticket: any) => void
+  onPaymentCompleted?: (data: any) => void
+  onDeliveryCompleted?: (data: any) => void
 }
 
 class RealTimeService {

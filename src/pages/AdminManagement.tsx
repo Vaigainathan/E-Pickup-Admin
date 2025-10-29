@@ -97,7 +97,7 @@ const AdminManagement: React.FC = () => {
         setAdmins(Array.isArray(response.data) ? response.data : [])
       } else {
         // ✅ FIX: Check if endpoint doesn't exist and provide fallback
-        if (response.error?.code === 'NOT_FOUND' || response.error?.status === 404) {
+        if (response.error?.code === 'NOT_FOUND' || response.error?.code === '404') {
           console.warn('Admin endpoint not found, using empty list')
           setAdmins([])
         } else {

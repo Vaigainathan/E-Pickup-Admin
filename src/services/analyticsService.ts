@@ -20,7 +20,7 @@ class AnalyticsService {
       const revenueData = results[0].status === 'fulfilled' ? results[0].value : { totalRevenue: 0, todayRevenue: 0, averageDailyRevenue: 0 }
       const driverData = results[1].status === 'fulfilled' ? results[1].value : { totalDrivers: 0, activeDrivers: 0, verifiedDrivers: 0, pendingVerification: 0, averageRating: 0 }
       const bookingData = results[2].status === 'fulfilled' ? results[2].value : { totalBookings: 0, completedBookings: 0, cancelledBookings: 0, activeBookings: 0, activeCustomers: 0, totalCustomers: 0, newCustomers: 0, averageBookingValue: 0, completionRate: 0, averageTripDuration: 0, averageDistance: 0, peakHours: [] }
-      const systemData = results[3].status === 'fulfilled' ? results[3].value : { averageResponseTime: 0 }
+      // ✅ FIX: systemData removed as it's not used in the return object
 
       return {
         period: `${startDate} to ${endDate}`,

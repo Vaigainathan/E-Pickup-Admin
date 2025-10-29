@@ -157,11 +157,9 @@ class BookingService {
   }
 
   async deleteBooking(bookingId: string, reason?: string): Promise<{ message: string }> {
-    // ✅ CRITICAL FIX: Use correct backend endpoint
-    const endpoint = reason 
-      ? `/api/bookings/${bookingId}?reason=${encodeURIComponent(reason)}`
-      : `/api/bookings/${bookingId}`
-    const response = await apiService.delete(endpoint)
+    // ✅ CRITICAL FIX: Use correct backend endpoint for admin deletion
+    const endpoint = `/api/admin/bookings/${bookingId}`
+    const response = await apiService.delete(endpoint, reason ? { reason } : undefined)
     if (response.success && response.data) {
       return response.data as any
     }

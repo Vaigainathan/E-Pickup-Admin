@@ -189,6 +189,18 @@ class RealTimeService {
       this.eventHandlers.onEmergencyAlert?.(data)
     })
 
+    // ✅ CRITICAL FIX: Payment completion events
+    this.socket.on('payment_completed', (data) => {
+      console.log('💰 Payment completed:', data)
+      this.eventHandlers.onPaymentCompleted?.(data)
+    })
+
+    // ✅ CRITICAL FIX: Delivery completion events
+    this.socket.on('delivery_completed', (data) => {
+      console.log('📦 Delivery completed:', data)
+      this.eventHandlers.onDeliveryCompleted?.(data)
+    })
+
     // System events
     this.socket.on('system_health_update', (data) => {
       console.log('💚 System health updated:', data)

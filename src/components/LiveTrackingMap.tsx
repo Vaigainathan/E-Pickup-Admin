@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  CircularProgress,
-  Alert,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -28,7 +25,8 @@ import {
 interface LiveTrackingMapProps {
   onBookingSelect?: (booking: any) => void;
   onDriverSelect?: (driver: any) => void;
-  refreshInterval?: number;
+  bookings?: Booking[];
+  drivers?: Driver[];
 }
 
 interface Booking {
@@ -67,73 +65,16 @@ interface Driver {
 const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   onBookingSelect,
   onDriverSelect,
-  refreshInterval = 10000
+  bookings = [],
+  drivers = []
 }) => {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
-    loadTrackingData();
-    const interval = setInterval(loadTrackingData, refreshInterval);
-    return () => clearInterval(interval);
-  }, [refreshInterval]);
-
-  const loadTrackingData = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // Mock data for demonstration
-      const mockBookings: Booking[] = [
-        {
-          id: '1',
-          customerName: 'John Doe',
-          pickupLocation: '123 Main St, City',
-          dropoffLocation: '456 Oak Ave, City',
-          status: 'in_progress',
-          fare: 150,
-          trackingData: {
-            currentLocation: {
-              latitude: 12.9716,
-              longitude: 77.5946,
-              timestamp: new Date().toISOString()
-            },
-            locationHistory: [
-              { latitude: 12.9716, longitude: 77.5946, timestamp: new Date().toISOString() }
-            ]
-          }
-        }
-      ];
-
-      const mockDrivers: Driver[] = [
-        {
-          id: '1',
-          name: 'Driver Smith',
-          phone: '+91 9876543210',
-          isOnline: true,
-          currentLocation: {
-            latitude: 12.9716,
-            longitude: 77.5946,
-            timestamp: new Date().toISOString()
-          }
-        }
-      ];
-
-      setBookings(mockBookings);
-      setDrivers(mockDrivers);
-      setLastUpdate(new Date());
-    } catch (err) {
-      console.error('Error loading tracking data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load tracking data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    setLastUpdate(new Date());
+  }, [bookings, drivers]);
 
   const handleBookingSelect = (booking: Booking) => {
     setSelectedBooking(booking);
@@ -155,28 +96,7 @@ const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
     }
   };
 
-  if (isLoading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
-        <Typography variant="h6" sx={{ mt: 2 }}>
-          Loading live tracking data...
-        </Typography>
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ m: 2 }}>
-        <Typography variant="h6">Error Loading Data</Typography>
-        <Typography>{error}</Typography>
-        <Button onClick={loadTrackingData} sx={{ mt: 1 }}>
-          Retry
-        </Button>
-      </Alert>
-    );
-  }
+  // Render
 
   return (
     <Box sx={{ p: 2 }}>
@@ -185,7 +105,7 @@ const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
           Live Tracking Dashboard
         </Typography>
         <Box>
-          <IconButton onClick={loadTrackingData} color="primary">
+          <IconButton onClick={() => setLastUpdate(new Date())} color="primary">
             <RefreshIcon />
           </IconButton>
           {lastUpdate && (

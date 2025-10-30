@@ -435,6 +435,37 @@ class LiveTrackingService {
   }
 
   /**
+   * Simulate websocket event for a booking (admin-only)
+   */
+  async simulateEvent(params: {
+    bookingId: string;
+    event: 'booking_status_update' | 'driver-location-update';
+    driverId?: string;
+    payload?: any;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/realtime/test/simulate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await secureTokenStorage.getToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(params)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return { success: !!data.success };
+    } catch (error) {
+      console.error('❌ [LIVE_TRACKING] Error simulating event:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to simulate event' };
+    }
+  }
+
+  /**
    * Cleanup service
    */
   cleanup() {

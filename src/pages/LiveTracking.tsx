@@ -146,6 +146,29 @@ const LiveTracking: React.FC = () => {
     }
   };
 
+  const handleSimulateStatus = async () => {
+    if (!selectedBooking) return;
+    try {
+      await liveTrackingService.simulateEvent({
+        bookingId: selectedBooking.id,
+        event: 'booking_status_update',
+        payload: { status: 'driver_enroute' }
+      });
+    } catch {}
+  };
+
+  const handleSimulateLocation = async () => {
+    if (!selectedBooking || !selectedDriver) return;
+    try {
+      await liveTrackingService.simulateEvent({
+        bookingId: selectedBooking.id,
+        event: 'driver-location-update',
+        driverId: selectedDriver.id,
+        payload: { location: { lat: 12.973, lng: 77.595 }, estimatedArrival: 6 }
+      });
+    } catch {}
+  };
+
   const handleStartTracking = async () => {
     try {
       setIsTrackingActive(true);
@@ -228,10 +251,29 @@ const LiveTracking: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Live Tracking Map
               </Typography>
+              <Box display="flex" gap={1} mb={2}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleSimulateStatus}
+                  disabled={!selectedBooking}
+                >
+                  Simulate Status
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleSimulateLocation}
+                  disabled={!selectedBooking || !selectedDriver}
+                >
+                  Simulate Location
+                </Button>
+              </Box>
               <LiveTrackingMap
                 onBookingSelect={handleBookingSelect}
                 onDriverSelect={handleDriverSelect}
-                refreshInterval={10000}
+                bookings={bookings}
+                drivers={drivers}
               />
             </CardContent>
           </Card>

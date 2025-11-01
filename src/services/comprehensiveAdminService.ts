@@ -643,14 +643,73 @@ class ComprehensiveAdminService {
       )
       const bookingsSnapshot = await getDocs(bookingsQuery)
       
-      const bookings: Booking[] = []
+      // ✅ FIX: Collect driverIds that need info fetching
+      const driverIdsToFetch = new Set<string>()
+      const bookingsData: any[] = []
+      
       bookingsSnapshot.forEach(doc => {
         const data = doc.data()
+        bookingsData.push({ id: doc.id, data })
+        
+        // If driverId exists but driverInfo is missing, add to fetch list
+        if (data.driverId && !data.driverInfo?.name) {
+          driverIdsToFetch.add(data.driverId)
+        }
+      })
+      
+      // ✅ FIX: Fetch driver info in parallel for bookings missing driverInfo
+      const driverInfoMap = new Map<string, any>()
+      if (driverIdsToFetch.size > 0) {
+        const driverFetchPromises = Array.from(driverIdsToFetch).map(async (driverId) => {
+          try {
+            const driverDocRef = doc(db, 'users', driverId)
+            const driverDocSnapshot = await getDoc(driverDocRef)
+            if (driverDocSnapshot.exists()) {
+              const driverData = driverDocSnapshot.data()
+              driverInfoMap.set(driverId, {
+                name: driverData.name || 'Driver',
+                phone: driverData.phone || '',
+                rating: driverData.driver?.rating || 0,
+                vehicleNumber: driverData.driver?.vehicleDetails?.vehicleNumber || '',
+                vehicleModel: driverData.driver?.vehicleDetails?.vehicleModel || ''
+              })
+            }
+          } catch (error) {
+            console.warn(`⚠️ Failed to fetch driver info for ${driverId}:`, error)
+          }
+        })
+        await Promise.all(driverFetchPromises)
+      }
+      
+      const bookings: Booking[] = []
+      bookingsData.forEach(({ id, data }) => {
+        // Determine driverInfo - use from booking document, or fetch from map
+        let driverInfo = undefined
+        if (data.driverId) {
+          if (data.driverInfo?.name) {
+            // Use driverInfo from booking document
+            driverInfo = {
+              name: data.driverInfo.name,
+              phone: data.driverInfo.phone || '',
+              rating: data.driverInfo.rating || 0
+            }
+          } else if (driverInfoMap.has(data.driverId)) {
+            // Use fetched driver info
+            driverInfo = driverInfoMap.get(data.driverId)
+          } else {
+            // Fallback
+            driverInfo = {
+              name: 'Driver Assigned',
+              phone: '',
+              rating: 0
+            }
+          }
+        }
         
         // Map the actual booking data structure to admin dashboard format
         bookings.push({
-          id: doc.id,
-          bookingId: data.bookingId || doc.id,
+          id: id,
+          bookingId: data.bookingId || id,
           customerId: data.customerId || '',
           driverId: data.driverId,
           // Map customer info from the actual data structure
@@ -668,12 +727,8 @@ class ComprehensiveAdminService {
             name: data.dropoff?.name || 'Recipient',
             phone: data.dropoff?.phone || '+91 9876543210'
           },
-          // Map driver info if available
-          driverInfo: data.driverId ? {
-            name: data.driverInfo?.name || 'Driver Assigned',
-            phone: data.driverInfo?.phone || '',
-            rating: data.driverInfo?.rating || 0
-          } : undefined,
+          // ✅ FIX: Use enriched driverInfo
+          driverInfo: driverInfo,
           // Map pickup location from actual data structure
           pickupLocation: {
             address: data.pickup?.address || data.pickupLocation?.address || 'No pickup address',

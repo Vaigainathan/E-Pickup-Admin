@@ -132,6 +132,9 @@ class FirebaseAuthService {
     try {
       console.log('📝 [ADMIN] Creating new admin user:', signupData.email);
 
+      // ✅ CORE FIX: Don't use reCAPTCHA for signup - Firebase handles this internally
+      // reCAPTCHA is only for login to prevent brute force attacks
+      // Firebase Auth has its own protection for user creation
       const result = await createUserWithEmailAndPassword(auth, signupData.email, signupData.password);
       
       // Update user profile
@@ -174,9 +177,30 @@ class FirebaseAuthService {
         console.log(`📋 Backend response status: ${createResponse.status}`);
 
         if (!createResponse.ok) {
-          const errorData = await createResponse.json();
-          console.error('❌ Admin user creation failed:', errorData);
-          throw new Error(`Admin user creation failed: ${errorData.error?.message || createResponse.statusText}`);
+          let errorData: any = {};
+          try {
+            errorData = await createResponse.json();
+          } catch {
+            // If JSON parsing fails, use status text
+            errorData = { error: { message: createResponse.statusText } };
+          }
+          
+          console.error('❌ Admin user creation failed:', {
+            status: createResponse.status,
+            statusText: createResponse.statusText,
+            errorData
+          });
+          
+          // ✅ CORE FIX: Better error messages for common issues
+          if (createResponse.status === 429) {
+            throw new Error('Too many signup attempts. Please wait a few minutes and try again.');
+          } else if (createResponse.status === 400) {
+            throw new Error(errorData.error?.message || 'Invalid signup data. Please check your information and try again.');
+          } else if (createResponse.status === 401) {
+            throw new Error('Authentication failed. Please refresh the page and try again.');
+          } else {
+            throw new Error(`Admin user creation failed: ${errorData.error?.message || createResponse.statusText}`);
+          }
         }
 
         const createData = await createResponse.json();
@@ -206,17 +230,40 @@ class FirebaseAuthService {
       } catch (backendError: any) {
         console.error('❌ Admin user creation failed:', backendError);
         
-        // Check if it's a network error (backend not running)
+        // ✅ CORE FIX: Better error handling for different error types
         if (backendError.message && (backendError.message.includes('Failed to fetch') || backendError.message.includes('NetworkError'))) {
           throw new Error('Backend server is not running. Please start the backend server and try again.');
         }
         
-        // Check if it's a permission error
         if (backendError.message && (backendError.message.includes('permission') || backendError.message.includes('PERMISSION_DENIED'))) {
           throw new Error('Insufficient permissions to create admin user. Please check Firebase configuration.');
         }
         
-        // For other errors, throw them instead of silently continuing
+        if (backendError.message && backendError.message.includes('Too many')) {
+          throw new Error('Too many signup attempts. Please wait a few minutes and try again.');
+        }
+        
+        if (backendError.message && (backendError.message.includes('already exists') || backendError.message.includes('ADMIN_EXISTS'))) {
+          throw new Error('An admin account with this email already exists. Please use the login page instead.');
+        }
+        
+        // For Firebase Auth errors
+        if (backendError.code) {
+          switch (backendError.code) {
+            case 'auth/email-already-in-use':
+              throw new Error('This email is already registered. Please use the login page instead.');
+            case 'auth/invalid-email':
+              throw new Error('Invalid email address. Please check your email and try again.');
+            case 'auth/weak-password':
+              throw new Error('Password is too weak. Please use a stronger password (at least 8 characters).');
+            case 'auth/operation-not-allowed':
+              throw new Error('Email/password accounts are not enabled. Please contact support.');
+            default:
+              throw new Error(`Firebase error: ${backendError.message || backendError.code}`);
+          }
+        }
+        
+        // For other errors, throw them with original message
         const errorMessage = backendError.message || backendError.toString() || 'Unknown error';
         throw new Error(`Admin creation failed: ${errorMessage}`);
       }

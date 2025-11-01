@@ -396,9 +396,13 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             color: driver?.vehicleInfo?.color || driver?.vehicle?.color || 'Unknown',
             plateNumber: driver?.vehicleInfo?.plateNumber || driver?.vehicle?.plateNumber || 'Unknown'
           },
-          // Ensure status and verification flags
+          // ✅ CORE FIX: Ensure status and verification flags - check both nested and top-level
           isActive: driver?.isActive !== false,
-          isVerified: driver?.isVerified === true || driver?.status === 'verified',
+          isVerified: driver?.isVerified === true || 
+                     driver?.driver?.isVerified === true || 
+                     driver?.driver?.verificationStatus === 'approved' ||
+                     driver?.driver?.verificationStatus === 'verified' ||
+                     driver?.status === 'verified',
           status: driver?.status || 'pending',
           createdAt: driver?.createdAt || new Date().toISOString()
         }))

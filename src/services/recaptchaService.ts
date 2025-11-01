@@ -11,8 +11,7 @@ declare global {
       ready: (callback: () => void) => void;
       execute: (siteKey: string, options: { 
         action: string;
-        timeout?: number;
-      }) => Promise<string>;
+      }) => Promise<string>; // ✅ CORE FIX: timeout is NOT a valid option in reCAPTCHA v3 API
       getResponse?: (widgetId?: number) => string;
       reset?: (widgetId?: number) => void;
     };
@@ -57,9 +56,9 @@ class RecaptchaService {
         }, timeout);
 
         window.grecaptcha.ready(() => {
+          // ✅ CORE FIX: reCAPTCHA v3 API only accepts siteKey and { action } - timeout is not a valid option
           window.grecaptcha.execute(this.siteKey, { 
-            action,
-            timeout: timeout 
+            action
           })
             .then((token: string) => {
               clearTimeout(timeoutId);

@@ -154,7 +154,9 @@ const LiveTracking: React.FC = () => {
         event: 'booking_status_update',
         payload: { status: 'driver_enroute' }
       });
-    } catch {}
+    } catch (err) {
+      console.error('Error simulating status:', err);
+    }
   };
 
   const handleSimulateLocation = async () => {
@@ -166,7 +168,9 @@ const LiveTracking: React.FC = () => {
         driverId: selectedDriver.id,
         payload: { location: { lat: 12.973, lng: 77.595 }, estimatedArrival: 6 }
       });
-    } catch {}
+    } catch (err) {
+      console.error('Error simulating location:', err);
+    }
   };
 
   const handleStartTracking = async () => {

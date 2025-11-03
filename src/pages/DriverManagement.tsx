@@ -316,68 +316,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   // Speed dial state
   const [speedDialOpen, setSpeedDialOpen] = useState(false)
 
-  // Initialize service with enhanced real-time capabilities
-  useEffect(() => {
-    const initializeService = async (): Promise<void> => {
-      try {
-        console.log('🔄 Initializing Modern Driver Management Service...')
-        await comprehensiveAdminService.initialize()
-        
-        // Setup real-time listeners
-        comprehensiveAdminService.setupRealTimeListeners()
-        
-        // Initialize real-time service
-        realTimeService.subscribeToDriverUpdates('admin_drivers')
-        
-        setIsInitialized(true)
-        setIsConnected(true)
-        console.log('✅ Modern Driver Management Service initialized successfully')
-        
-        // Setup enhanced real-time event listeners
-        const handleDriverUpdate = (event: CustomEvent) => {
-          console.log('📱 Driver update received:', event.detail)
-          if (realTimeEnabled) {
-            fetchDrivers()
-          }
-        }
-        
-        const handleDriverVerification = (event: CustomEvent) => {
-          console.log('✅ Driver verification update received:', event.detail)
-          if (realTimeEnabled) {
-            fetchDrivers()
-          }
-        }
-        
-        const handleDriverStatusChange = (event: CustomEvent) => {
-          console.log('🔄 Driver status change received:', event.detail)
-          if (realTimeEnabled) {
-            fetchDrivers()
-          }
-        }
-        
-        // Add event listeners
-        window.addEventListener('driverUpdate', handleDriverUpdate as any)
-        window.addEventListener('driverVerification', handleDriverVerification as any)
-        window.addEventListener('driverStatusChange', handleDriverStatusChange as any)
-        
-      } catch (error) {
-        console.error('❌ Failed to initialize Modern Driver Management Service:', error)
-        setError('Failed to initialize driver management service. Please refresh the page.')
-        setIsConnected(false)
-      }
-    }
-
-    initializeService()
-    
-    // Cleanup function
-    return () => {
-      console.log('🧹 Cleaning up real-time subscriptions...')
-      // Cleanup is handled by useEffect
-      comprehensiveAdminService.cleanup()
-      realTimeService.disconnect()
-    }
-  }, [realTimeEnabled])
-
+  // ✅ CRITICAL FIX: Define fetchDrivers BEFORE useEffect that uses it
   // Enhanced fetch drivers with real-time data processing and error handling
   const fetchDrivers = useCallback(async () => {
     const startTime = performance.now()
@@ -430,71 +369,20 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               const doc = documents[docType as keyof Driver['documents']]
               if (doc && (doc.url || doc.downloadURL)) {
                 totalDocs++
-                const isVerified = doc.verified === true || 
-                                  doc.status === 'verified' || 
-                                  doc.verificationStatus === 'verified'
-                if (isVerified) {
+                if (doc.status === 'verified' || doc.verified === true) {
                   verifiedDocs++
                 }
               }
             })
             
-            // CRITICAL FIX: Simplified logic - if all docs are verified, driver is verified
-            const allDocsVerified = totalDocs > 0 && verifiedDocs === totalDocs
-            const isExplicitlyVerified = driverVerificationStatus === 'verified' || 
-                                         driverVerificationStatus === 'approved'
-            
-            // Final verification: Either explicitly verified OR all docs verified
-            const finalIsVerified = isExplicitlyVerified || allDocsVerified
-            
-            console.log('🔍 Verification status calculation:', {
-              driverId: driver?.id,
-              driverVerificationStatus,
-              verifiedDocs,
-              totalDocs,
-              allDocsVerified,
-              isExplicitlyVerified,
-              finalStatus: finalIsVerified
-            })
-            
-            return finalIsVerified
-          })(),
-          status: (() => {
-            const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
-            // Check if all required documents are verified - read from multiple possible locations
-            const documents = driver?.documents || driver?.driver?.documents || {}
-            const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
-            let verifiedDocs = 0
-            let totalDocs = 0
-            
-            requiredDocTypes.forEach(docType => {
-              const doc = documents[docType as keyof Driver['documents']]
-              if (doc && (doc.url || doc.downloadURL)) {
-                totalDocs++
-                const isVerified = doc.verified === true || 
-                                  doc.status === 'verified' || 
-                                  doc.verificationStatus === 'verified'
-                if (isVerified) {
-                  verifiedDocs++
-                }
-              }
-            })
-            
-            // Determine status based on verification state
-            if (driverVerificationStatus === 'verified' || driverVerificationStatus === 'approved') {
-              return 'verified'
-            } else if (driverVerificationStatus === 'rejected') {
-              return 'rejected'
-            } else if (totalDocs > 0 && verifiedDocs === totalDocs) {
-              return 'verified'
-            } else if (totalDocs > 0 && verifiedDocs > 0) {
-              return 'pending_verification'
-            } else {
-              return 'pending'
+            // If all required documents are verified, driver is verified
+            if (verifiedDocs === requiredDocTypes.length && totalDocs === requiredDocTypes.length) {
+              return true
             }
+            
+            // Otherwise check verification status field
+            return driverVerificationStatus === 'verified' || driver?.isVerified === true
           })(),
-          isOnline: driver?.isOnline || false,
-          isAvailable: driver?.isAvailable || false,
           rating: Math.max(0, Math.min(5, driver?.rating || 0)), // Clamp rating between 0-5
           totalTrips: Math.max(0, driver?.totalTrips || 0), // Ensure non-negative
           earnings: {
@@ -502,112 +390,36 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             thisMonth: Math.max(0, driver?.earnings?.thisMonth || 0),
             lastMonth: Math.max(0, driver?.earnings?.lastMonth || 0)
           },
-          // CRITICAL FIX: Read documents from multiple possible locations
-          documents: driver?.documents || driver?.driver?.documents || {},
           createdAt: driver?.createdAt || new Date().toISOString()
         }))
         
         setDrivers(driversData)
+        setLastRefreshTime(new Date())
+        setLastUpdated(new Date())
+        setRetryCount(0)
         
         // Categorize drivers with error handling
         const pending = driversData.filter(driver => !driver.isVerified)
         const online = driversData.filter(driver => driver.isOnline && driver.isActive)
         const blocked = driversData.filter(driver => driver.status === 'blocked' || driver.status === 'suspended')
-        // const recent = driversData
-        //   .filter(driver => driver.createdAt)
-        //   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        //   .slice(0, 5)
         
         setPendingVerifications(pending)
         setOnlineDrivers(online)
         setBlockedDrivers(blocked)
-        // setRecentDrivers(recent) // Removed unused function call
         setNotificationCount(pending.length)
         
         // Calculate pagination with validation
         setTotalPages(Math.max(1, Math.ceil(driversData.length / itemsPerPage)))
         
-        setIsConnected(true)
-        setLastUpdated(new Date())
-        setLastRefreshTime(new Date())
-        setRetryCount(0) // Reset retry count on success
         const endTime = performance.now()
-        console.log(`✅ Drivers fetched and processed successfully: ${driversData.length} drivers in ${(endTime - startTime).toFixed(2)}ms`)
+        console.log(`✅ Drivers fetched successfully in ${(endTime - startTime).toFixed(2)}ms:`, {
+          count: driversData.length,
+          verified: driversData.filter(d => d.isVerified).length,
+          online: driversData.filter(d => d.isOnline).length,
+          available: driversData.filter(d => d.isAvailable).length
+        })
       } else {
-        console.error('❌ Failed to fetch drivers:', response.error)
-        setError(`Failed to fetch drivers: ${response.error || 'Unknown error'}`)
-        setIsConnected(false)
-        
-        // Set enhanced mock data for demonstration with correct Driver type structure
-        const mockDrivers: Driver[] = [
-          {
-            id: 'driver-1',
-            personalInfo: { name: 'John Smith', email: 'john@example.com', phone: '+1234567890' },
-            vehicleInfo: { make: 'Honda', model: 'Civic', year: 2020, color: 'Blue', plateNumber: 'ABC123' },
-            isActive: true,
-            isVerified: true,
-            isOnline: true,
-            isAvailable: true,
-            status: 'verified',
-            rating: 4.8,
-            totalTrips: 150,
-            earnings: { total: 12500, thisMonth: 2500, lastMonth: 3000 },
-            documents: {
-              drivingLicense: { url: '', status: 'verified', verified: true },
-              bikeInsurance: { url: '', status: 'verified', verified: true },
-              rcBook: { url: '', status: 'verified', verified: true },
-              aadhaarCard: { url: '', status: 'verified', verified: true },
-              profilePhoto: { url: '', status: 'verified', verified: true }
-            },
-            createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
-          },
-          {
-            id: 'driver-2',
-            personalInfo: { name: 'Sarah Johnson', email: 'sarah@example.com', phone: '+1234567891' },
-            vehicleInfo: { make: 'Toyota', model: 'Camry', year: 2019, color: 'Red', plateNumber: 'XYZ789' },
-            isActive: true,
-            isVerified: false,
-            isOnline: false,
-            isAvailable: false,
-            status: 'pending',
-            rating: 0,
-            totalTrips: 0,
-            earnings: { total: 0, thisMonth: 0, lastMonth: 0 },
-            documents: {
-              drivingLicense: { url: '', status: 'pending', verified: false },
-              bikeInsurance: { url: '', status: 'pending', verified: false }
-            },
-            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-          },
-          {
-            id: 'driver-3',
-            personalInfo: { name: 'Mike Wilson', email: 'mike@example.com', phone: '+1234567892' },
-            vehicleInfo: { make: 'Suzuki', model: 'Swift', year: 2021, color: 'White', plateNumber: 'DEF456' },
-            isActive: true,
-            isVerified: true,
-            isOnline: true,
-            isAvailable: false,
-            status: 'verified',
-            rating: 4.2,
-            totalTrips: 89,
-            earnings: { total: 8900, thisMonth: 1800, lastMonth: 2200 },
-            documents: {
-              drivingLicense: { url: '', status: 'verified', verified: true },
-              bikeInsurance: { url: '', status: 'verified', verified: true },
-              rcBook: { url: '', status: 'verified', verified: true },
-              aadhaarCard: { url: '', status: 'verified', verified: true },
-              profilePhoto: { url: '', status: 'verified', verified: true }
-            },
-            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
-          }
-        ]
-        setDrivers(mockDrivers)
-        setPendingVerifications(mockDrivers.filter(d => !d.isVerified))
-        setOnlineDrivers(mockDrivers.filter(d => d.isOnline))
-        setBlockedDrivers(mockDrivers.filter(d => d.status === 'blocked'))
-        setNotificationCount(mockDrivers.filter(d => !d.isVerified).length)
-        setTotalPages(Math.max(1, Math.ceil(mockDrivers.length / itemsPerPage)))
-        console.log('⚠️ Using mock driver data for demonstration')
+        throw new Error(response.error?.message || 'Failed to fetch drivers')
       }
     } catch (error) {
       console.error('❌ Error fetching drivers:', error)
@@ -618,6 +430,105 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       setDriversLoading(false)
     }
   }, [itemsPerPage])
+
+  // Initialize service with enhanced real-time capabilities
+  useEffect(() => {
+    // ✅ CRITICAL FIX: Define event handlers outside async function for cleanup
+    const handleDriverUpdate = (event: CustomEvent) => {
+      console.log('📱 Driver update received:', event.detail)
+      if (realTimeEnabled) {
+        fetchDrivers()
+      }
+    }
+    
+    const handleDriverVerification = (event: CustomEvent) => {
+      console.log('✅ Driver verification update received:', event.detail)
+      if (realTimeEnabled) {
+        fetchDrivers()
+      }
+    }
+    
+    const handleDriverStatusChange = (event: CustomEvent) => {
+      console.log('🔄 Driver status change received:', event.detail)
+      if (realTimeEnabled) {
+        fetchDrivers()
+      }
+    }
+    
+    // ✅ CRITICAL FIX: Handle driver earnings updates in real-time
+    const handleDriverEarningsUpdate = (event: CustomEvent) => {
+      console.log('💰 Driver earnings update received:', event.detail)
+      if (realTimeEnabled) {
+        // Refresh drivers list to show updated earnings
+        fetchDrivers()
+      }
+    }
+    
+    // ✅ CRITICAL FIX: Handle booking deletion (may affect earnings)
+    const handleBookingDeleted = (event: CustomEvent) => {
+      console.log('🗑️ Booking deleted received:', event.detail)
+      if (realTimeEnabled) {
+        // Refresh drivers list as earnings may have been reduced
+        fetchDrivers()
+      }
+    }
+    
+    // ✅ CRITICAL FIX: Handle driver rating updates in real-time (driver isolated)
+    const handleDriverRatingUpdate = (event: CustomEvent) => {
+      console.log('⭐ Driver rating update received:', event.detail)
+      if (realTimeEnabled) {
+        // Refresh drivers list to show updated rating for the specific driver
+        fetchDrivers()
+      }
+    }
+    
+    const initializeService = async (): Promise<void> => {
+      try {
+        console.log('🔄 Initializing Modern Driver Management Service...')
+        await comprehensiveAdminService.initialize()
+        
+        // Setup real-time listeners
+        comprehensiveAdminService.setupRealTimeListeners()
+        
+        // Initialize real-time service
+        realTimeService.subscribeToDriverUpdates('admin_drivers')
+        
+        setIsInitialized(true)
+        setIsConnected(true)
+        console.log('✅ Modern Driver Management Service initialized successfully')
+        
+        // Add event listeners
+              window.addEventListener('driverUpdate', handleDriverUpdate as any)
+              window.addEventListener('driverVerification', handleDriverVerification as any)
+              window.addEventListener('driverStatusChange', handleDriverStatusChange as any)
+              window.addEventListener('driver_earnings_updated', handleDriverEarningsUpdate as any)
+              window.addEventListener('booking_deleted', handleBookingDeleted as any)
+              window.addEventListener('driver_rating_updated', handleDriverRatingUpdate as any)
+        
+      } catch (error) {
+        console.error('❌ Failed to initialize Modern Driver Management Service:', error)
+        setError('Failed to initialize driver management service. Please refresh the page.')
+        setIsConnected(false)
+      }
+    }
+
+    initializeService()
+    
+    // Cleanup function
+    return () => {
+      console.log('🧹 Cleaning up real-time subscriptions...')
+      // Remove event listeners
+            window.removeEventListener('driverUpdate', handleDriverUpdate as any)
+            window.removeEventListener('driverVerification', handleDriverVerification as any)
+            window.removeEventListener('driverStatusChange', handleDriverStatusChange as any)
+            window.removeEventListener('driver_earnings_updated', handleDriverEarningsUpdate as any)
+            window.removeEventListener('booking_deleted', handleBookingDeleted as any)
+            window.removeEventListener('driver_rating_updated', handleDriverRatingUpdate as any)
+      // Cleanup is handled by useEffect
+      comprehensiveAdminService.cleanup()
+      realTimeService.disconnect()
+    }
+  }, [realTimeEnabled, fetchDrivers])
 
   // Initial data fetch
   useEffect(() => {

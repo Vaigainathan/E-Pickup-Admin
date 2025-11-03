@@ -51,6 +51,8 @@ import {
 } from '@mui/icons-material'
 import { customerService } from '../services/customerService'
 import { useNavigate } from 'react-router-dom'
+import { websocketService } from '../services/websocketService'
+import { secureTokenStorage } from '../services/secureTokenStorage'
 
 interface Customer {
   id: string
@@ -243,8 +245,92 @@ const CustomerManagement: React.FC = () => {
     }
   }
 
+  // ✅ CRITICAL FIX: Initialize WebSocket and set up real-time booking count updates
   useEffect(() => {
+    let isMounted = true
+    const eventHandlers: { [key: string]: (data: any) => void } = {}
+    
+    // ✅ CRITICAL FIX: Listen for booking events to update customer counts in real-time
+    const handleBookingCreated = (data: any) => {
+      console.log('📦 [CustomerManagement] Booking created, refreshing customer list:', data)
+      if (isMounted) {
+        // Refresh customer list to update booking counts
+        loadCustomers()
+      }
+    }
+    
+    const handleBookingDeleted = (data: any) => {
+      console.log('🗑️ [CustomerManagement] Booking deleted, refreshing customer list:', data)
+      if (isMounted) {
+        // Refresh customer list to update booking counts
+        loadCustomers()
+      }
+    }
+    
+    const handleBookingStatusUpdate = (data: any) => {
+      // Only refresh if status changes to/from completed, cancelled, or delivered
+      // These status changes might affect booking counts if filtering is implemented
+      const relevantStatuses = ['completed', 'cancelled', 'delivered']
+      if (data.status && relevantStatuses.includes(data.status)) {
+        console.log('📊 [CustomerManagement] Booking status update, refreshing customer list:', data)
+        if (isMounted) {
+          loadCustomers()
+        }
+      }
+    }
+    
+    // Store handlers for cleanup
+    eventHandlers['booking_created'] = handleBookingCreated
+    eventHandlers['booking_deleted'] = handleBookingDeleted
+    eventHandlers['booking_status_update'] = handleBookingStatusUpdate
+    
+    const initializeWebSocket = async () => {
+      try {
+        // Get authentication token
+        const token = await secureTokenStorage.getToken()
+        if (token && token.length > 10) {
+          try {
+            await websocketService.connect(token)
+            console.log('✅ [CustomerManagement] WebSocket connected for real-time booking updates')
+            
+            // Register WebSocket event listeners after connection
+            websocketService.on('booking_created', handleBookingCreated)
+            websocketService.on('booking_deleted', handleBookingDeleted)
+            websocketService.on('booking_status_update', handleBookingStatusUpdate)
+            console.log('✅ [CustomerManagement] Real-time booking event listeners registered')
+          } catch (wsError) {
+            console.warn('⚠️ [CustomerManagement] WebSocket connection failed, continuing without real-time updates:', wsError)
+          }
+        }
+      } catch (error) {
+        console.error('❌ [CustomerManagement] Error initializing WebSocket:', error)
+        // Don't fail if WebSocket initialization fails - continue without real-time updates
+      }
+    }
+    
+    // Initialize WebSocket (don't await - let it run in background)
+    initializeWebSocket()
+    
+    // Initial load of customers
     loadCustomers()
+    
+    // Cleanup on unmount
+    return () => {
+      isMounted = false
+      // Clean up event listeners
+      if (eventHandlers) {
+        if (eventHandlers['booking_created']) {
+          websocketService.off('booking_created', eventHandlers['booking_created'])
+        }
+        if (eventHandlers['booking_deleted']) {
+          websocketService.off('booking_deleted', eventHandlers['booking_deleted'])
+        }
+        if (eventHandlers['booking_status_update']) {
+          websocketService.off('booking_status_update', eventHandlers['booking_status_update'])
+        }
+        console.log('🧹 [CustomerManagement] Real-time booking event listeners cleaned up')
+      }
+    }
   }, [loadCustomers])
 
   if (loading) {

@@ -148,6 +148,30 @@ class WebSocketService {
       this.emit('payment_failed', data)
     })
 
+    // ✅ CRITICAL FIX: Driver earnings update events
+    this.socket.on('driver_earnings_updated', (data) => {
+      console.log('💰 Driver earnings updated:', data)
+      this.emit('driver_earnings_updated', data)
+      // ✅ CRITICAL FIX: Dispatch window event for DriverManagement component
+      window.dispatchEvent(new CustomEvent('driver_earnings_updated', { detail: data }))
+    })
+
+    // Booking deleted event
+    this.socket.on('booking_deleted', (data) => {
+      console.log('🗑️ Booking deleted:', data)
+      this.emit('booking_deleted', data)
+      // ✅ CRITICAL FIX: Dispatch window event for DriverManagement component
+      window.dispatchEvent(new CustomEvent('booking_deleted', { detail: data }))
+    })
+
+    // ✅ CRITICAL FIX: Driver rating update events (driver isolated)
+    this.socket.on('driver_rating_updated', (data) => {
+      console.log('⭐ Driver rating updated:', data)
+      this.emit('driver_rating_updated', data)
+      // ✅ CRITICAL FIX: Dispatch window event for DriverManagement component
+      window.dispatchEvent(new CustomEvent('driver_rating_updated', { detail: data }))
+    })
+
     // Notification events
     this.socket.on('notification_sent', (data) => {
       this.emit('notification_sent', data)

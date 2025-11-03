@@ -651,13 +651,19 @@ class ComprehensiveAdminService {
         const data = doc.data()
         bookingsData.push({ id: doc.id, data })
         
-        // If driverId exists but driverInfo is missing, add to fetch list
-        if (data.driverId && !data.driverInfo?.name) {
+        // ✅ CRITICAL FIX: Always fetch driver verification status for bookings with driverId
+        // This ensures we get the most current verification status, even if booking has cached driverInfo
+        // Reasons to always fetch:
+        // 1. Driver verification status might have changed since booking assignment
+        // 2. Booking might have driverInfo but missing isVerified field
+        // 3. We need current status to match driver management screen
+        if (data.driverId) {
           driverIdsToFetch.add(data.driverId)
         }
       })
       
       // ✅ FIX: Fetch driver info in parallel for bookings missing driverInfo
+      // ✅ CRITICAL FIX: Also fetch driver verification status
       const driverInfoMap = new Map<string, any>()
       if (driverIdsToFetch.size > 0) {
         const driverFetchPromises = Array.from(driverIdsToFetch).map(async (driverId) => {
@@ -666,12 +672,39 @@ class ComprehensiveAdminService {
             const driverDocSnapshot = await getDoc(driverDocRef)
             if (driverDocSnapshot.exists()) {
               const driverData = driverDocSnapshot.data()
+              
+              // ✅ CRITICAL FIX: Determine verification status using same logic as getDriversFromFirestore
+              const isVerified = (() => {
+                // Priority 1: Check driver.verificationStatus
+                if (driverData.driver?.verificationStatus === 'approved' || driverData.driver?.verificationStatus === 'verified') {
+                  return true
+                }
+                // Priority 2: Check isVerified flag
+                if (driverData.driver?.isVerified === true || driverData.isVerified === true) {
+                  return true
+                }
+                // Priority 3: Check if all documents are verified
+                const driverDocs = driverData.driver?.documents || {}
+                const docKeys = Object.keys(driverDocs)
+                if (docKeys.length > 0) {
+                  const allVerified = docKeys.every(key => {
+                    const doc = driverDocs[key]
+                    return doc && (doc.verified === true || doc.status === 'verified' || doc.verificationStatus === 'verified')
+                  })
+                  if (allVerified) {
+                    return true
+                  }
+                }
+                return false
+              })()
+              
               driverInfoMap.set(driverId, {
                 name: driverData.name || 'Driver',
                 phone: driverData.phone || '',
                 rating: driverData.driver?.rating || 0,
                 vehicleNumber: driverData.driver?.vehicleDetails?.vehicleNumber || '',
-                vehicleModel: driverData.driver?.vehicleDetails?.vehicleModel || ''
+                vehicleModel: driverData.driver?.vehicleDetails?.vehicleModel || '',
+                isVerified: isVerified // ✅ CRITICAL FIX: Include verification status
               })
             }
           } catch (error) {
@@ -685,6 +718,8 @@ class ComprehensiveAdminService {
       bookingsData.forEach(({ id, data }) => {
         // Determine driverInfo - use from booking document, or fetch from map
         let driverInfo = undefined
+        let driverVerified = false // ✅ CRITICAL FIX: Initialize driver verification status
+        
         if (data.driverId) {
           if (data.driverInfo?.name) {
             // Use driverInfo from booking document
@@ -693,17 +728,47 @@ class ComprehensiveAdminService {
               phone: data.driverInfo.phone || '',
               rating: data.driverInfo.rating || 0
             }
+            // ✅ CRITICAL FIX: Check verification status from booking document's driverInfo
+            // Priority 1: Check driverInfo.isVerified (most reliable - set when driver accepts)
+            if (data.driverInfo.isVerified !== undefined) {
+              driverVerified = data.driverInfo.isVerified === true
+            }
+            // Priority 2: Check booking-level driverVerified field
+            else if (data.driverVerified !== undefined) {
+              driverVerified = data.driverVerified === true
+            }
+            // Priority 3: If verification status not in booking, fetch from driverInfoMap (current status)
+            else if (driverInfoMap.has(data.driverId)) {
+              const fetchedDriverInfo = driverInfoMap.get(data.driverId)
+              driverVerified = fetchedDriverInfo.isVerified === true
+            }
+            // Priority 4: Fallback to false if no verification data available
+            else {
+              driverVerified = false
+            }
           } else if (driverInfoMap.has(data.driverId)) {
-            // Use fetched driver info
-            driverInfo = driverInfoMap.get(data.driverId)
+            // Use fetched driver info (booking has driverId but no driverInfo embedded)
+            const fetchedDriverInfo = driverInfoMap.get(data.driverId)
+            driverInfo = {
+              name: fetchedDriverInfo.name,
+              phone: fetchedDriverInfo.phone || '',
+              rating: fetchedDriverInfo.rating || 0
+            }
+            // ✅ CRITICAL FIX: Use verification status from fetched driver data (most current)
+            driverVerified = fetchedDriverInfo.isVerified === true
           } else {
-            // Fallback
+            // Fallback: Driver ID exists but we couldn't fetch driver info
+            // This could happen if driver was deleted or fetch failed
             driverInfo = {
               name: 'Driver Assigned',
               phone: '',
               rating: 0
             }
+            driverVerified = false // ✅ Default to false for safety
           }
+        } else {
+          // ✅ CRITICAL FIX: No driver assigned - explicitly set to undefined/false
+          driverVerified = false
         }
         
         // Map the actual booking data structure to admin dashboard format
@@ -729,6 +794,8 @@ class ComprehensiveAdminService {
           },
           // ✅ FIX: Use enriched driverInfo
           driverInfo: driverInfo,
+          // ✅ CRITICAL FIX: Set driverVerified status
+          driverVerified: driverVerified,
           // Map pickup location from actual data structure
           pickupLocation: {
             address: data.pickup?.address || data.pickupLocation?.address || 'No pickup address',
@@ -766,21 +833,53 @@ class ComprehensiveAdminService {
           updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           scheduledAt: data.scheduledAt?.toDate?.()?.toISOString(),
           completedAt: data.completedAt?.toDate?.()?.toISOString(),
-          // Map photo verifications
-          pickupVerification: data.pickupVerification ? {
-            photoUrl: data.pickupVerification.photoUrl || '',
-            verifiedAt: data.pickupVerification.verifiedAt?.toDate?.()?.toISOString() || data.pickupVerification.verifiedAt || '',
-            verifiedBy: data.pickupVerification.verifiedBy || '',
-            location: data.pickupVerification.location,
-            notes: data.pickupVerification.notes
-          } : undefined,
-          deliveryVerification: data.deliveryVerification ? {
-            photoUrl: data.deliveryVerification.photoUrl || '',
-            verifiedAt: data.deliveryVerification.verifiedAt?.toDate?.()?.toISOString() || data.deliveryVerification.verifiedAt || '',
-            verifiedBy: data.deliveryVerification.verifiedBy || '',
-            location: data.deliveryVerification.location,
-            notes: data.deliveryVerification.notes
-          } : undefined
+          // ✅ CRITICAL FIX: Map photo verifications - check both new structure (pickupVerification/deliveryVerification) and old structure (photoVerification.pickup/photoVerification.delivery)
+          pickupVerification: (() => {
+            // Priority 1: Check new structure first (direct fields)
+            if (data.pickupVerification && data.pickupVerification.photoUrl) {
+              return {
+                photoUrl: data.pickupVerification.photoUrl || '',
+                verifiedAt: data.pickupVerification.verifiedAt?.toDate?.()?.toISOString() || data.pickupVerification.verifiedAt || '',
+                verifiedBy: data.pickupVerification.verifiedBy || data.pickupVerification.uploadedBy || '',
+                location: data.pickupVerification.location,
+                notes: data.pickupVerification.notes
+              };
+            }
+            // Priority 2: Check old structure (nested photoVerification.pickup)
+            if (data.photoVerification?.pickup && data.photoVerification.pickup.photoUrl) {
+              return {
+                photoUrl: data.photoVerification.pickup.photoUrl || '',
+                verifiedAt: data.photoVerification.pickup.uploadedAt?.toDate?.()?.toISOString() || data.photoVerification.pickup.verifiedAt?.toDate?.()?.toISOString() || data.photoVerification.pickup.verifiedAt || '',
+                verifiedBy: data.photoVerification.pickup.verifiedBy || data.photoVerification.pickup.uploadedBy || '',
+                location: data.photoVerification.pickup.location,
+                notes: data.photoVerification.pickup.notes
+              };
+            }
+            return undefined;
+          })(),
+          deliveryVerification: (() => {
+            // Priority 1: Check new structure first (direct fields)
+            if (data.deliveryVerification && data.deliveryVerification.photoUrl) {
+              return {
+                photoUrl: data.deliveryVerification.photoUrl || '',
+                verifiedAt: data.deliveryVerification.verifiedAt?.toDate?.()?.toISOString() || data.deliveryVerification.verifiedAt || '',
+                verifiedBy: data.deliveryVerification.verifiedBy || '',
+                location: data.deliveryVerification.location,
+                notes: data.deliveryVerification.notes
+              };
+            }
+            // Priority 2: Check old structure (nested photoVerification.delivery)
+            if (data.photoVerification?.delivery && data.photoVerification.delivery.photoUrl) {
+              return {
+                photoUrl: data.photoVerification.delivery.photoUrl || '',
+                verifiedAt: data.photoVerification.delivery.uploadedAt?.toDate?.()?.toISOString() || data.photoVerification.delivery.verifiedAt?.toDate?.()?.toISOString() || data.photoVerification.delivery.verifiedAt || '',
+                verifiedBy: data.photoVerification.delivery.verifiedBy || data.photoVerification.delivery.uploadedBy || '',
+                location: data.photoVerification.delivery.location,
+                notes: data.photoVerification.delivery.notes
+              };
+            }
+            return undefined;
+          })()
         } as any)
       })
       

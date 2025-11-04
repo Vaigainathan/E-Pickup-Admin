@@ -539,6 +539,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   const getPaymentStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'completed': return theme.success
+      case 'confirmed': return theme.success // ✅ FIX: Handle 'confirmed' status (same as 'completed')
       case 'pending': return theme.warning
       case 'failed': return theme.error
       case 'refunded': return theme.info

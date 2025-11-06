@@ -1935,7 +1935,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                         <Typography variant="body2" color={theme.text.secondary} gutterBottom>
                           Pickup Verification
                         </Typography>
-                        {selectedBooking.pickupVerification ? (
+                        {selectedBooking.pickupVerification && selectedBooking.pickupVerification.photoUrl ? (
                           <Box>
                             <Box mb={1}>
                               <img 
@@ -1947,14 +1947,18 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                                   height: '150px', 
                                   objectFit: 'cover', 
                                   borderRadius: '8px' 
-                                }} 
+                                }}
+                                onError={(e) => {
+                                  console.error('❌ Failed to load pickup verification image:', selectedBooking.pickupVerification?.photoUrl);
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
                               />
                             </Box>
                             <Typography variant="body2" color={theme.text.secondary}>
-                              Verified: {new Date(selectedBooking.pickupVerification.verifiedAt).toLocaleString()}
+                              Verified: {selectedBooking.pickupVerification.verifiedAt ? new Date(selectedBooking.pickupVerification.verifiedAt).toLocaleString() : 'N/A'}
                             </Typography>
                             <Typography variant="body2" color={theme.text.secondary}>
-                              By: {selectedBooking.pickupVerification.verifiedBy}
+                              By: {selectedBooking.pickupVerification.verifiedBy || 'Driver'}
                             </Typography>
                             {selectedBooking.pickupVerification.notes && (
                               <Typography variant="body2" color={theme.text.secondary}>
@@ -1974,7 +1978,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                         <Typography variant="body2" color={theme.text.secondary} gutterBottom>
                           Delivery Verification
                         </Typography>
-                        {selectedBooking.deliveryVerification ? (
+                        {selectedBooking.deliveryVerification && selectedBooking.deliveryVerification.photoUrl ? (
                           <Box>
                             <Box mb={1}>
                               <img 
@@ -1986,14 +1990,18 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                                   height: '150px', 
                                   objectFit: 'cover', 
                                   borderRadius: '8px' 
-                                }} 
+                                }}
+                                onError={(e) => {
+                                  console.error('❌ Failed to load delivery verification image:', selectedBooking.deliveryVerification?.photoUrl);
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
                               />
                             </Box>
                             <Typography variant="body2" color={theme.text.secondary}>
-                              Verified: {new Date(selectedBooking.deliveryVerification.verifiedAt).toLocaleString()}
+                              Verified: {selectedBooking.deliveryVerification.verifiedAt ? new Date(selectedBooking.deliveryVerification.verifiedAt).toLocaleString() : 'N/A'}
                             </Typography>
                             <Typography variant="body2" color={theme.text.secondary}>
-                              By: {selectedBooking.deliveryVerification.verifiedBy}
+                              By: {selectedBooking.deliveryVerification.verifiedBy || 'Driver'}
                             </Typography>
                             {selectedBooking.deliveryVerification.notes && (
                               <Typography variant="body2" color={theme.text.secondary}>

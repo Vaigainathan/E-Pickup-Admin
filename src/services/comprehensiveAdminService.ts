@@ -836,47 +836,89 @@ class ComprehensiveAdminService {
           // ✅ CRITICAL FIX: Map photo verifications - check both new structure (pickupVerification/deliveryVerification) and old structure (photoVerification.pickup/photoVerification.delivery)
           pickupVerification: (() => {
             // Priority 1: Check new structure first (direct fields)
-            if (data.pickupVerification && data.pickupVerification.photoUrl) {
+            // ✅ FIX: More robust check - ensure photoUrl exists and is not empty
+            if (data.pickupVerification && data.pickupVerification.photoUrl && typeof data.pickupVerification.photoUrl === 'string' && data.pickupVerification.photoUrl.trim().length > 0) {
+              console.log(`✅ [ADMIN_SERVICE] Found pickup verification for booking ${id}:`, {
+                photoUrl: data.pickupVerification.photoUrl,
+                hasVerifiedAt: !!data.pickupVerification.verifiedAt,
+                verifiedBy: data.pickupVerification.verifiedBy
+              });
               return {
-                photoUrl: data.pickupVerification.photoUrl || '',
-                verifiedAt: data.pickupVerification.verifiedAt?.toDate?.()?.toISOString() || data.pickupVerification.verifiedAt || '',
+                photoUrl: data.pickupVerification.photoUrl.trim(),
+                verifiedAt: data.pickupVerification.verifiedAt?.toDate?.()?.toISOString() || 
+                              (typeof data.pickupVerification.verifiedAt === 'string' ? data.pickupVerification.verifiedAt : '') ||
+                              data.pickupVerification.verifiedAt || '',
                 verifiedBy: data.pickupVerification.verifiedBy || data.pickupVerification.uploadedBy || '',
                 location: data.pickupVerification.location,
                 notes: data.pickupVerification.notes
               };
             }
             // Priority 2: Check old structure (nested photoVerification.pickup)
-            if (data.photoVerification?.pickup && data.photoVerification.pickup.photoUrl) {
+            if (data.photoVerification?.pickup && data.photoVerification.pickup.photoUrl && typeof data.photoVerification.pickup.photoUrl === 'string' && data.photoVerification.pickup.photoUrl.trim().length > 0) {
+              console.log(`✅ [ADMIN_SERVICE] Found pickup verification (old structure) for booking ${id}`);
               return {
-                photoUrl: data.photoVerification.pickup.photoUrl || '',
-                verifiedAt: data.photoVerification.pickup.uploadedAt?.toDate?.()?.toISOString() || data.photoVerification.pickup.verifiedAt?.toDate?.()?.toISOString() || data.photoVerification.pickup.verifiedAt || '',
+                photoUrl: data.photoVerification.pickup.photoUrl.trim(),
+                verifiedAt: data.photoVerification.pickup.uploadedAt?.toDate?.()?.toISOString() || 
+                           data.photoVerification.pickup.verifiedAt?.toDate?.()?.toISOString() || 
+                           (typeof data.photoVerification.pickup.verifiedAt === 'string' ? data.photoVerification.pickup.verifiedAt : '') ||
+                           data.photoVerification.pickup.verifiedAt || '',
                 verifiedBy: data.photoVerification.pickup.verifiedBy || data.photoVerification.pickup.uploadedBy || '',
                 location: data.photoVerification.pickup.location,
                 notes: data.photoVerification.pickup.notes
               };
             }
+            // ✅ DEBUG: Log when no pickup verification found
+            if (data.pickupVerification) {
+              console.warn(`⚠️ [ADMIN_SERVICE] Pickup verification exists but photoUrl is missing/invalid for booking ${id}:`, {
+                hasPickupVerification: !!data.pickupVerification,
+                photoUrl: data.pickupVerification.photoUrl,
+                photoUrlType: typeof data.pickupVerification.photoUrl,
+                photoUrlLength: data.pickupVerification.photoUrl?.length
+              });
+            }
             return undefined;
           })(),
           deliveryVerification: (() => {
             // Priority 1: Check new structure first (direct fields)
-            if (data.deliveryVerification && data.deliveryVerification.photoUrl) {
+            // ✅ FIX: More robust check - ensure photoUrl exists and is not empty
+            if (data.deliveryVerification && data.deliveryVerification.photoUrl && typeof data.deliveryVerification.photoUrl === 'string' && data.deliveryVerification.photoUrl.trim().length > 0) {
+              console.log(`✅ [ADMIN_SERVICE] Found delivery verification for booking ${id}:`, {
+                photoUrl: data.deliveryVerification.photoUrl,
+                hasVerifiedAt: !!data.deliveryVerification.verifiedAt,
+                verifiedBy: data.deliveryVerification.verifiedBy
+              });
               return {
-                photoUrl: data.deliveryVerification.photoUrl || '',
-                verifiedAt: data.deliveryVerification.verifiedAt?.toDate?.()?.toISOString() || data.deliveryVerification.verifiedAt || '',
+                photoUrl: data.deliveryVerification.photoUrl.trim(),
+                verifiedAt: data.deliveryVerification.verifiedAt?.toDate?.()?.toISOString() || 
+                           (typeof data.deliveryVerification.verifiedAt === 'string' ? data.deliveryVerification.verifiedAt : '') ||
+                           data.deliveryVerification.verifiedAt || '',
                 verifiedBy: data.deliveryVerification.verifiedBy || '',
                 location: data.deliveryVerification.location,
                 notes: data.deliveryVerification.notes
               };
             }
             // Priority 2: Check old structure (nested photoVerification.delivery)
-            if (data.photoVerification?.delivery && data.photoVerification.delivery.photoUrl) {
+            if (data.photoVerification?.delivery && data.photoVerification.delivery.photoUrl && typeof data.photoVerification.delivery.photoUrl === 'string' && data.photoVerification.delivery.photoUrl.trim().length > 0) {
+              console.log(`✅ [ADMIN_SERVICE] Found delivery verification (old structure) for booking ${id}`);
               return {
-                photoUrl: data.photoVerification.delivery.photoUrl || '',
-                verifiedAt: data.photoVerification.delivery.uploadedAt?.toDate?.()?.toISOString() || data.photoVerification.delivery.verifiedAt?.toDate?.()?.toISOString() || data.photoVerification.delivery.verifiedAt || '',
+                photoUrl: data.photoVerification.delivery.photoUrl.trim(),
+                verifiedAt: data.photoVerification.delivery.uploadedAt?.toDate?.()?.toISOString() || 
+                           data.photoVerification.delivery.verifiedAt?.toDate?.()?.toISOString() || 
+                           (typeof data.photoVerification.delivery.verifiedAt === 'string' ? data.photoVerification.delivery.verifiedAt : '') ||
+                           data.photoVerification.delivery.verifiedAt || '',
                 verifiedBy: data.photoVerification.delivery.verifiedBy || data.photoVerification.delivery.uploadedBy || '',
                 location: data.photoVerification.delivery.location,
                 notes: data.photoVerification.delivery.notes
               };
+            }
+            // ✅ DEBUG: Log when no delivery verification found
+            if (data.deliveryVerification) {
+              console.warn(`⚠️ [ADMIN_SERVICE] Delivery verification exists but photoUrl is missing/invalid for booking ${id}:`, {
+                hasDeliveryVerification: !!data.deliveryVerification,
+                photoUrl: data.deliveryVerification.photoUrl,
+                photoUrlType: typeof data.deliveryVerification.photoUrl,
+                photoUrlLength: data.deliveryVerification.photoUrl?.length
+              });
             }
             return undefined;
           })()

@@ -1950,6 +1950,17 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                                 }}
                                 onError={(e) => {
                                   console.error('❌ Failed to load pickup verification image:', selectedBooking.pickupVerification?.photoUrl);
+                                  console.error('❌ Image error details:', {
+                                    src: (e.target as HTMLImageElement).src,
+                                    naturalWidth: (e.target as HTMLImageElement).naturalWidth,
+                                    naturalHeight: (e.target as HTMLImageElement).naturalHeight
+                                  });
+                                  // Show error message instead of hiding
+                                  const errorDiv = document.createElement('div');
+                                  errorDiv.textContent = 'Failed to load image';
+                                  errorDiv.style.color = '#dc3545';
+                                  errorDiv.style.fontSize = '12px';
+                                  (e.target as HTMLImageElement).parentElement?.appendChild(errorDiv);
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                               />
@@ -1993,6 +2004,17 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                                 }}
                                 onError={(e) => {
                                   console.error('❌ Failed to load delivery verification image:', selectedBooking.deliveryVerification?.photoUrl);
+                                  console.error('❌ Image error details:', {
+                                    src: (e.target as HTMLImageElement).src,
+                                    naturalWidth: (e.target as HTMLImageElement).naturalWidth,
+                                    naturalHeight: (e.target as HTMLImageElement).naturalHeight
+                                  });
+                                  // Show error message instead of hiding
+                                  const errorDiv = document.createElement('div');
+                                  errorDiv.textContent = 'Failed to load image';
+                                  errorDiv.style.color = '#dc3545';
+                                  errorDiv.style.fontSize = '12px';
+                                  (e.target as HTMLImageElement).parentElement?.appendChild(errorDiv);
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                               />

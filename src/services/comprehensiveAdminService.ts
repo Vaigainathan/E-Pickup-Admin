@@ -843,8 +843,11 @@ class ComprehensiveAdminService {
                 hasVerifiedAt: !!data.pickupVerification.verifiedAt,
                 verifiedBy: data.pickupVerification.verifiedBy
               });
+              const normalizedPhotoUrl = data.pickupVerification.photoUrl.trim()
               return {
-                photoUrl: data.pickupVerification.photoUrl.trim(),
+                photoUrl: normalizedPhotoUrl,
+                rawPhotoUrl: normalizedPhotoUrl,
+                source: 'firestore',
                 verifiedAt: data.pickupVerification.verifiedAt?.toDate?.()?.toISOString() || 
                               (typeof data.pickupVerification.verifiedAt === 'string' ? data.pickupVerification.verifiedAt : '') ||
                               data.pickupVerification.verifiedAt || '',
@@ -856,8 +859,11 @@ class ComprehensiveAdminService {
             // Priority 2: Check old structure (nested photoVerification.pickup)
             if (data.photoVerification?.pickup && data.photoVerification.pickup.photoUrl && typeof data.photoVerification.pickup.photoUrl === 'string' && data.photoVerification.pickup.photoUrl.trim().length > 0) {
               console.log(`✅ [ADMIN_SERVICE] Found pickup verification (old structure) for booking ${id}`);
+              const legacyPhotoUrl = data.photoVerification.pickup.photoUrl.trim()
               return {
-                photoUrl: data.photoVerification.pickup.photoUrl.trim(),
+                photoUrl: legacyPhotoUrl,
+                rawPhotoUrl: legacyPhotoUrl,
+                source: 'firestore_legacy',
                 verifiedAt: data.photoVerification.pickup.uploadedAt?.toDate?.()?.toISOString() || 
                            data.photoVerification.pickup.verifiedAt?.toDate?.()?.toISOString() || 
                            (typeof data.photoVerification.pickup.verifiedAt === 'string' ? data.photoVerification.pickup.verifiedAt : '') ||
@@ -887,8 +893,11 @@ class ComprehensiveAdminService {
                 hasVerifiedAt: !!data.deliveryVerification.verifiedAt,
                 verifiedBy: data.deliveryVerification.verifiedBy
               });
+              const normalizedPhotoUrl = data.deliveryVerification.photoUrl.trim()
               return {
-                photoUrl: data.deliveryVerification.photoUrl.trim(),
+                photoUrl: normalizedPhotoUrl,
+                rawPhotoUrl: normalizedPhotoUrl,
+                source: 'firestore',
                 verifiedAt: data.deliveryVerification.verifiedAt?.toDate?.()?.toISOString() || 
                            (typeof data.deliveryVerification.verifiedAt === 'string' ? data.deliveryVerification.verifiedAt : '') ||
                            data.deliveryVerification.verifiedAt || '',
@@ -900,8 +909,11 @@ class ComprehensiveAdminService {
             // Priority 2: Check old structure (nested photoVerification.delivery)
             if (data.photoVerification?.delivery && data.photoVerification.delivery.photoUrl && typeof data.photoVerification.delivery.photoUrl === 'string' && data.photoVerification.delivery.photoUrl.trim().length > 0) {
               console.log(`✅ [ADMIN_SERVICE] Found delivery verification (old structure) for booking ${id}`);
+              const legacyPhotoUrl = data.photoVerification.delivery.photoUrl.trim()
               return {
-                photoUrl: data.photoVerification.delivery.photoUrl.trim(),
+                photoUrl: legacyPhotoUrl,
+                rawPhotoUrl: legacyPhotoUrl,
+                source: 'firestore_legacy',
                 verifiedAt: data.photoVerification.delivery.uploadedAt?.toDate?.()?.toISOString() || 
                            data.photoVerification.delivery.verifiedAt?.toDate?.()?.toISOString() || 
                            (typeof data.photoVerification.delivery.verifiedAt === 'string' ? data.photoVerification.delivery.verifiedAt : '') ||

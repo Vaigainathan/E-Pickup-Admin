@@ -56,6 +56,7 @@ import {
   Settings as SettingsIcon,
   Close as CloseIcon,
   Delete as DeleteIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { bookingService } from '../services/bookingService'
@@ -120,9 +121,15 @@ interface Booking {
   }
   // Photo verifications
   pickupVerification?: {
-    photoUrl: string
-    verifiedAt: string
-    verifiedBy: string
+    photoUrl?: string
+    rawPhotoUrl?: string
+    storagePath?: string
+    storageBucket?: string
+    source?: string
+    signedUrlExpiresAt?: string | null
+    signedUrlError?: string | null
+    verifiedAt?: string
+    verifiedBy?: string
     location?: {
       latitude: number
       longitude: number
@@ -130,15 +137,201 @@ interface Booking {
     notes?: string
   }
   deliveryVerification?: {
-    photoUrl: string
-    verifiedAt: string
-    verifiedBy: string
+    photoUrl?: string
+    rawPhotoUrl?: string
+    storagePath?: string
+    storageBucket?: string
+    source?: string
+    signedUrlExpiresAt?: string | null
+    signedUrlError?: string | null
+    verifiedAt?: string
+    verifiedBy?: string
     location?: {
       latitude: number
       longitude: number
     }
     notes?: string
   }
+}
+
+const isHttpUrl = (value?: string | null): boolean => {
+  if (!value || typeof value !== 'string') {
+    return false
+  }
+  return /^https?:\/\//i.test(value)
+}
+
+type VerificationPhoto = Booking['pickupVerification']
+
+interface VerificationPhotoCardProps {
+  title: string
+  verification?: VerificationPhoto
+}
+
+const VerificationPhotoCard: React.FC<VerificationPhotoCardProps> = ({ title, verification }) => {
+  const [imageStatus, setImageStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>(
+    verification?.photoUrl ? 'loading' : 'idle'
+  )
+
+  useEffect(() => {
+    if (verification?.photoUrl) {
+      setImageStatus('loading')
+    } else {
+      setImageStatus('idle')
+    }
+  }, [verification?.photoUrl])
+
+  const imageUrl = verification?.photoUrl || null
+  const backupUrl = useMemo(() => {
+    if (verification?.rawPhotoUrl && isHttpUrl(verification.rawPhotoUrl)) {
+      return verification.rawPhotoUrl
+    }
+    return null
+  }, [verification?.rawPhotoUrl])
+
+  const handleOpenFull = useCallback(() => {
+    const urlToOpen = imageUrl || backupUrl
+    if (urlToOpen) {
+      window.open(urlToOpen, '_blank', 'noopener,noreferrer')
+    }
+  }, [imageUrl, backupUrl])
+
+  const showMetadata = Boolean(
+    verification?.verifiedAt ||
+      verification?.verifiedBy ||
+      verification?.notes ||
+      verification?.source ||
+      verification?.signedUrlExpiresAt ||
+      verification?.storagePath
+  )
+
+  return (
+    <Box p={2} sx={{ background: theme.primary + '05', borderRadius: 2 }}>
+      <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+        {title}
+      </Typography>
+      {imageUrl ? (
+        <Box>
+          <Box mb={1} position="relative" sx={{ width: '100%', maxWidth: 240 }}>
+            {imageStatus !== 'loaded' && (
+              <Skeleton
+                variant="rounded"
+                width="100%"
+                height={150}
+                animation={imageStatus === 'error' ? false : 'wave'}
+                sx={{ borderRadius: '8px' }}
+              />
+            )}
+            <Box
+              component="img"
+              src={imageUrl}
+              alt={`${title} verification`}
+              sx={{
+                width: '100%',
+                height: 150,
+                objectFit: 'cover',
+                borderRadius: '8px',
+                display: imageStatus === 'error' ? 'none' : 'block',
+                boxShadow: theme.shadow
+              }}
+              onLoad={() => setImageStatus('loaded')}
+              onError={() => {
+                console.error(`❌ Failed to load ${title.toLowerCase()} verification image:`, imageUrl)
+                setImageStatus('error')
+              }}
+            />
+          </Box>
+
+          {imageStatus === 'error' && (
+            <Typography variant="body2" color={theme.error} gutterBottom>
+              Failed to load image. {backupUrl ? 'Try opening the original link below.' : ''}
+            </Typography>
+          )}
+
+          {showMetadata && (
+            <Box mb={1} display="flex" flexDirection="column" gap={0.5}>
+              {verification?.source && (
+                <Chip
+                  size="small"
+                  label={verification.source === 'signed' || verification.source === 'cache' ? 'Signed URL' : verification.source}
+                  color="primary"
+                  variant="outlined"
+                  sx={{ alignSelf: 'flex-start' }}
+                />
+              )}
+              {verification?.signedUrlExpiresAt && (
+                <Tooltip title={`Signed URL expires ${new Date(verification.signedUrlExpiresAt).toLocaleString()}`}>
+                  <Typography variant="caption" color={theme.text.secondary}>
+                    Expires: {new Date(verification.signedUrlExpiresAt).toLocaleString()}
+                  </Typography>
+                </Tooltip>
+              )}
+              {verification?.storagePath && (
+                <Tooltip title={verification.storagePath}>
+                  <Typography variant="caption" color={theme.text.secondary}>
+                    Storage path saved
+                  </Typography>
+                </Tooltip>
+              )}
+            </Box>
+          )}
+
+          <Typography variant="body2" color={theme.text.secondary}>
+            Verified: {verification?.verifiedAt ? new Date(verification.verifiedAt).toLocaleString() : 'N/A'}
+          </Typography>
+          <Typography variant="body2" color={theme.text.secondary}>
+            By: {verification?.verifiedBy || 'Driver'}
+          </Typography>
+          {verification?.notes && (
+            <Typography variant="body2" color={theme.text.secondary}>
+              Notes: {verification.notes}
+            </Typography>
+          )}
+
+          <Box display="flex" alignItems="center" gap={1.5} mt={1}>
+            <Button
+              variant="outlined"
+              size="small"
+              endIcon={<OpenInNewIcon fontSize="small" />}
+              onClick={handleOpenFull}
+              disabled={!imageUrl && !backupUrl}
+            >
+              View Full
+            </Button>
+            {backupUrl && imageUrl !== backupUrl && (
+              <Tooltip title="Open raw image URL">
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => window.open(backupUrl, '_blank', 'noopener,noreferrer')}
+                >
+                  Open Raw
+                </Button>
+              </Tooltip>
+            )}
+            {!backupUrl && verification?.rawPhotoUrl && (
+              <Tooltip title={verification.rawPhotoUrl}>
+                <Chip size="small" label="Raw path" />
+              </Tooltip>
+            )}
+          </Box>
+        </Box>
+      ) : (
+        <Box>
+          <Typography variant="body2" color={theme.text.secondary}>
+            {verification?.rawPhotoUrl
+              ? 'Stored verification path available but no public URL yet.'
+              : `No ${title.toLowerCase()} verification photo`}
+          </Typography>
+          {verification?.rawPhotoUrl && (
+            <Tooltip title={verification.rawPhotoUrl}>
+              <Chip size="small" label="Raw path" sx={{ mt: 1 }} />
+            </Tooltip>
+          )}
+        </Box>
+      )}
+    </Box>
+  )
 }
 
 const ModernBookingManagement: React.FC = React.memo(() => {
@@ -346,7 +539,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
             // Extract driver name from driverInfo or fallback
             const driverName = booking.driverInfo?.name || booking.driverName || 'No Driver Assigned';
             
-            return {
+            const normalizedBooking: Booking = {
               ...booking,
               id: booking.id || `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               status: booking.status || 'unknown',
@@ -368,22 +561,82 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                 name: booking.recipientInfo?.name || booking.dropoff?.name || 'Recipient',
                 phone: booking.recipientInfo?.phone || booking.dropoff?.phone || '+91 9876543210'
               }
+            };
+
+            const fallbackVerification = (primary?: any, fallback?: any) => {
+              const candidate = primary && typeof primary === 'object'
+                ? primary
+                : (fallback && typeof fallback === 'object' ? fallback : null);
+              if (!candidate) return undefined;
+              const photoUrl = (typeof candidate.photoUrl === 'string' && candidate.photoUrl.trim()) ||
+                (typeof candidate.photoURL === 'string' && candidate.photoURL.trim()) ||
+                (typeof candidate.url === 'string' && candidate.url.trim());
+              if (!photoUrl) return undefined;
+              const rawVerifiedAt = candidate.verifiedAt || candidate.uploadedAt || candidate.metadata?.verifiedAt;
+              let verifiedAt: string | undefined;
+              if (rawVerifiedAt) {
+                if (typeof rawVerifiedAt.toDate === 'function') {
+                  verifiedAt = rawVerifiedAt.toDate().toISOString();
+                } else if (rawVerifiedAt instanceof Date) {
+                  verifiedAt = rawVerifiedAt.toISOString();
+                } else if (typeof rawVerifiedAt === 'string') {
+                  const parsed = new Date(rawVerifiedAt);
+                  verifiedAt = Number.isNaN(parsed.getTime()) ? rawVerifiedAt : parsed.toISOString();
+                }
+              }
+              const rawLocation = candidate.location || candidate.coordinates || candidate.metadata?.location;
+              let location: { latitude: number; longitude: number } | undefined;
+              if (rawLocation && typeof rawLocation === 'object') {
+                const lat = rawLocation.latitude ?? rawLocation.lat ?? rawLocation._latitude ?? rawLocation.coords?.latitude;
+                const lng = rawLocation.longitude ?? rawLocation.lng ?? rawLocation._longitude ?? rawLocation.coords?.longitude;
+                if (typeof lat === 'number' && typeof lng === 'number') {
+                  location = { latitude: lat, longitude: lng };
+                }
+              }
+
+              return {
+                photoUrl: photoUrl.trim(),
+                verifiedAt,
+                verifiedBy: candidate.verifiedBy || candidate.uploadedBy || candidate.reviewedBy || '',
+                location,
+                notes: candidate.notes || candidate.note || candidate.description || candidate.metadata?.notes || candidate.metadata?.note
+              };
+            };
+
+            if (!normalizedBooking.pickupVerification) {
+              normalizedBooking.pickupVerification = fallbackVerification(
+                booking.pickupVerification,
+                booking.originalData?.photoVerification?.pickup
+              ) as any;
             }
+
+            if (!normalizedBooking.deliveryVerification) {
+              normalizedBooking.deliveryVerification = fallbackVerification(
+                booking.deliveryVerification,
+                booking.originalData?.photoVerification?.delivery
+              ) as any;
+            }
+
+            return normalizedBooking;
           } catch (error) {
             console.error('Error normalizing booking:', error, booking)
             return {
               id: `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              status: 'unknown',
+              customerId: booking?.customerId || '',
+              driverId: booking?.driverId,
+              status: 'pending',
               fare: 0,
               customerName: 'Unknown Customer',
               driverName: 'No Driver Assigned',
               pickupLocation: { address: 'No pickup address', coordinates: { lat: 0, lng: 0 } },
               dropoffLocation: { address: 'No dropoff address', coordinates: { lat: 0, lng: 0 } },
               paymentStatus: 'pending',
+              distance: typeof booking?.distance === 'number' ? booking.distance : 0,
+              estimatedTime: typeof booking?.estimatedTime === 'number' ? booking.estimatedTime : 0,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
               driverVerified: false
-            }
+            } as Booking
           }
         })
         
@@ -1931,112 +2184,16 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
-                      <Box p={2} sx={{ background: theme.primary + '05', borderRadius: 2 }}>
-                        <Typography variant="body2" color={theme.text.secondary} gutterBottom>
-                          Pickup Verification
-                        </Typography>
-                        {selectedBooking.pickupVerification && selectedBooking.pickupVerification.photoUrl ? (
-                          <Box>
-                            <Box mb={1}>
-                              <img 
-                                src={selectedBooking.pickupVerification.photoUrl} 
-                                alt="Pickup verification" 
-                                style={{ 
-                                  width: '100%', 
-                                  maxWidth: '200px', 
-                                  height: '150px', 
-                                  objectFit: 'cover', 
-                                  borderRadius: '8px' 
-                                }}
-                                onError={(e) => {
-                                  console.error('❌ Failed to load pickup verification image:', selectedBooking.pickupVerification?.photoUrl);
-                                  console.error('❌ Image error details:', {
-                                    src: (e.target as HTMLImageElement).src,
-                                    naturalWidth: (e.target as HTMLImageElement).naturalWidth,
-                                    naturalHeight: (e.target as HTMLImageElement).naturalHeight
-                                  });
-                                  // Show error message instead of hiding
-                                  const errorDiv = document.createElement('div');
-                                  errorDiv.textContent = 'Failed to load image';
-                                  errorDiv.style.color = '#dc3545';
-                                  errorDiv.style.fontSize = '12px';
-                                  (e.target as HTMLImageElement).parentElement?.appendChild(errorDiv);
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                              />
-                            </Box>
-                            <Typography variant="body2" color={theme.text.secondary}>
-                              Verified: {selectedBooking.pickupVerification.verifiedAt ? new Date(selectedBooking.pickupVerification.verifiedAt).toLocaleString() : 'N/A'}
-                            </Typography>
-                            <Typography variant="body2" color={theme.text.secondary}>
-                              By: {selectedBooking.pickupVerification.verifiedBy || 'Driver'}
-                            </Typography>
-                            {selectedBooking.pickupVerification.notes && (
-                              <Typography variant="body2" color={theme.text.secondary}>
-                                Notes: {selectedBooking.pickupVerification.notes}
-                              </Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <Typography variant="body2" color={theme.text.secondary}>
-                            No pickup verification photo
-                          </Typography>
-                        )}
-                      </Box>
+                      <VerificationPhotoCard
+                        title="Pickup Verification"
+                        verification={selectedBooking.pickupVerification}
+                      />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <Box p={2} sx={{ background: theme.primary + '05', borderRadius: 2 }}>
-                        <Typography variant="body2" color={theme.text.secondary} gutterBottom>
-                          Delivery Verification
-                        </Typography>
-                        {selectedBooking.deliveryVerification && selectedBooking.deliveryVerification.photoUrl ? (
-                          <Box>
-                            <Box mb={1}>
-                              <img 
-                                src={selectedBooking.deliveryVerification.photoUrl} 
-                                alt="Delivery verification" 
-                                style={{ 
-                                  width: '100%', 
-                                  maxWidth: '200px', 
-                                  height: '150px', 
-                                  objectFit: 'cover', 
-                                  borderRadius: '8px' 
-                                }}
-                                onError={(e) => {
-                                  console.error('❌ Failed to load delivery verification image:', selectedBooking.deliveryVerification?.photoUrl);
-                                  console.error('❌ Image error details:', {
-                                    src: (e.target as HTMLImageElement).src,
-                                    naturalWidth: (e.target as HTMLImageElement).naturalWidth,
-                                    naturalHeight: (e.target as HTMLImageElement).naturalHeight
-                                  });
-                                  // Show error message instead of hiding
-                                  const errorDiv = document.createElement('div');
-                                  errorDiv.textContent = 'Failed to load image';
-                                  errorDiv.style.color = '#dc3545';
-                                  errorDiv.style.fontSize = '12px';
-                                  (e.target as HTMLImageElement).parentElement?.appendChild(errorDiv);
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                              />
-                            </Box>
-                            <Typography variant="body2" color={theme.text.secondary}>
-                              Verified: {selectedBooking.deliveryVerification.verifiedAt ? new Date(selectedBooking.deliveryVerification.verifiedAt).toLocaleString() : 'N/A'}
-                            </Typography>
-                            <Typography variant="body2" color={theme.text.secondary}>
-                              By: {selectedBooking.deliveryVerification.verifiedBy || 'Driver'}
-                            </Typography>
-                            {selectedBooking.deliveryVerification.notes && (
-                              <Typography variant="body2" color={theme.text.secondary}>
-                                Notes: {selectedBooking.deliveryVerification.notes}
-                              </Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <Typography variant="body2" color={theme.text.secondary}>
-                            No delivery verification photo
-                          </Typography>
-                        )}
-                      </Box>
+                      <VerificationPhotoCard
+                        title="Delivery Verification"
+                        verification={selectedBooking.deliveryVerification}
+                      />
                     </Grid>
                   </Grid>
                 </Box>

@@ -180,26 +180,25 @@ export interface Booking {
     phone: string
   }
   // Photo verifications
-  pickupVerification?: {
-    photoUrl: string
-    verifiedAt: string
-    verifiedBy: string
-    location?: {
-      latitude: number
-      longitude: number
-    }
-    notes?: string
+  pickupVerification?: VerificationDetail
+  deliveryVerification?: VerificationDetail
+}
+
+export interface VerificationDetail {
+  photoUrl?: string
+  rawPhotoUrl?: string
+  storagePath?: string
+  storageBucket?: string
+  source?: string
+  signedUrlExpiresAt?: string | null
+  signedUrlError?: string | null
+  verifiedAt?: string
+  verifiedBy?: string | null
+  location?: {
+    latitude: number
+    longitude: number
   }
-  deliveryVerification?: {
-    photoUrl: string
-    verifiedAt: string
-    verifiedBy: string
-    location?: {
-      latitude: number
-      longitude: number
-    }
-    notes?: string
-  }
+  notes?: string | null
 }
 
 // Emergency Types

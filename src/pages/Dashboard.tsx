@@ -201,6 +201,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   const [supportTickets, setSupportTickets] = useState<any[]>([])
   const [systemHealth, setSystemHealth] = useState<any>(null)
   const [customers, setCustomers] = useState<any[]>([])
+  const [cancellations, setCancellations] = useState<any[]>([]) // ✅ NEW: Cancellations state
 
   // Loading states
   const [driversLoading, setDriversLoading] = useState(false)
@@ -209,6 +210,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   const [ticketsLoading, setTicketsLoading] = useState(false)
   const [healthLoading, setHealthLoading] = useState(false)
   const [customersLoading, setCustomersLoading] = useState(false)
+  const [cancellationsLoading, setCancellationsLoading] = useState(false) // ✅ NEW: Cancellations loading
   
   // Revenue state
   const [revenueLoading, setRevenueLoading] = useState(false)
@@ -678,6 +680,32 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   }, [])
 
   // Fetch all data
+  // ✅ NEW: Fetch cancellations
+  const fetchCancellations = useCallback(async () => {
+    try {
+      setCancellationsLoading(true)
+      console.log('🔄 Fetching cancellations...')
+      
+      const response = await comprehensiveAdminService.getCancellations({
+        limit: 10, // Get recent cancellations for widget
+        offset: 0
+      })
+      
+      if (response.success && response.data) {
+        setCancellations(response.data)
+        console.log('✅ Cancellations fetched successfully:', response.data.length)
+      } else {
+        console.error('❌ Failed to fetch cancellations:', response.error)
+        setCancellations([])
+      }
+    } catch (error) {
+      console.error('❌ Error fetching cancellations:', error)
+      setCancellations([])
+    } finally {
+      setCancellationsLoading(false)
+    }
+  }, [])
+
   const fetchAllData = useCallback(async () => {
     if (!isInitialized) return
 
@@ -693,7 +721,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         fetchSupportTickets(),
         fetchSystemHealth(),
         fetchCustomers(),
-        fetchRevenue()
+        fetchRevenue(),
+        fetchCancellations() // ✅ NEW: Fetch cancellations
       ])
       
       setLastUpdated(new Date())
@@ -705,7 +734,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     } finally {
       setIsLoading(false)
     }
-  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers])
+  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers, fetchCancellations])
 
   // Initial data fetch
   useEffect(() => {
@@ -746,6 +775,15 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     const suspendedCustomers = customers?.filter(c => c?.accountStatus === 'suspended').length || 0
     const bannedCustomers = customers?.filter(c => c?.accountStatus === 'banned').length || 0
 
+    // ✅ NEW: Cancellation metrics
+    const totalCancellations = cancellations?.length || 0
+    const pickupCancellations = cancellations?.filter(c => 
+      c?.cancelledAtStage === 'photo_captured' || c?.cancelledAtStage === 'driver_arrived'
+    ).length || 0
+    const driverCancellations = cancellations?.filter(c => 
+      c?.cancelledBy === 'driver'
+    ).length || 0
+
     return {
       drivers: {
         total: totalDrivers,
@@ -773,6 +811,11 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         active: activeCustomers,
         suspended: suspendedCustomers,
         banned: bannedCustomers
+      },
+      cancellations: { // ✅ NEW: Cancellation metrics
+        total: totalCancellations,
+        pickup: pickupCancellations,
+        byDriver: driverCancellations
       }
     }
   }, [
@@ -780,7 +823,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     bookings?.length,
     emergencyAlerts?.length,
     supportTickets?.length,
-    customers?.length
+    customers?.length,
+    cancellations?.length // ✅ NEW: Include cancellations in dependencies
   ])
 
   const handleRefresh = useCallback(async () => {
@@ -1377,6 +1421,19 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
           />
         </Grid>
 
+        {/* ✅ NEW: Pickup Cancellations Metric */}
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard
+            title="Pickup Cancellations"
+            value={metrics.cancellations?.pickup || 0}
+            icon={<ErrorIcon />}
+            color="#dc3545"
+            subtitle={`${metrics.cancellations?.total || 0} total`}
+            loading={cancellationsLoading}
+            onClick={() => navigate('/bookings?status=cancelled_at_pickup')}
+          />
+        </Grid>
+
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Notifications"
@@ -1502,6 +1559,106 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                     )}
                   </List>
                 </Collapse>
+              </CardContent>
+            </Card>
+          </Fade>
+        </Grid>
+
+        {/* ✅ NEW: Recent Cancellations Widget */}
+        <Grid item xs={12} md={6}>
+          <Fade in={true} timeout={1200}>
+            <Card 
+              sx={{ 
+                height: '100%',
+                background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                border: '1px solid rgba(0, 0, 0, 0.05)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                  <Typography variant="h6" fontWeight="600" color="#dc3545">
+                    Recent Cancellations
+                  </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => navigate('/bookings?status=cancelled')}
+                    sx={{ color: '#dc3545' }}
+                  >
+                    View All
+                  </Button>
+                </Box>
+                {cancellationsLoading ? (
+                  <Box display="flex" justifyContent="center" p={3}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : cancellations.length > 0 ? (
+                  <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+                    {cancellations.slice(0, 5).map((cancellation: any) => (
+                      <ListItem 
+                        key={cancellation.id}
+                        sx={{ 
+                          px: 0, 
+                          py: 1.5,
+                          borderRadius: 1,
+                          '&:hover': {
+                            backgroundColor: 'rgba(220, 53, 69, 0.05)',
+                            cursor: 'pointer'
+                          }
+                        }}
+                        onClick={() => navigate(`/bookings?bookingId=${cancellation.bookingId}`)}
+                      >
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: '#dc3545', width: 40, height: 40 }}>
+                            <ErrorIcon fontSize="small" />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box display="flex" alignItems="center" justifyContent="space-between">
+                              <Typography variant="body2" fontWeight="600">
+                                Booking #{cancellation.bookingId?.substring(0, 8) || 'N/A'}
+                              </Typography>
+                              <Chip
+                                label={cancellation.reason === 'package_damaged' ? 'Damaged' :
+                                       cancellation.reason === 'wrong_item' ? 'Wrong Item' :
+                                       cancellation.reason === 'package_too_large' ? 'Too Large' :
+                                       cancellation.reason === 'prohibited_item' ? 'Prohibited' :
+                                       cancellation.reason === 'customer_unavailable' ? 'Unavailable' :
+                                       cancellation.reason === 'wrong_address' ? 'Wrong Address' : 'Other'}
+                                size="small"
+                                sx={{ 
+                                  bgcolor: '#dc3545',
+                                  color: 'white',
+                                  fontSize: '0.7rem',
+                                  height: 20,
+                                  fontWeight: 500
+                                }}
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <Box>
+                              <Typography variant="caption" color="textSecondary" display="block">
+                                {cancellation.cancelledBy === 'driver' ? 'Cancelled by Driver' : 
+                                 cancellation.cancelledBy === 'customer' ? 'Cancelled by Customer' : 'Cancelled by Admin'}
+                              </Typography>
+                              <Typography variant="caption" color="textSecondary">
+                                {cancellation.cancelledAt ? new Date(cancellation.cancelledAt).toLocaleString() : 'N/A'}
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  <Box textAlign="center" p={3}>
+                    <Typography variant="body2" color="textSecondary">
+                      No recent cancellations
+                    </Typography>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Fade>

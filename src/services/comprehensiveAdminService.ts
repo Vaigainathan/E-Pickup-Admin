@@ -2547,6 +2547,127 @@ class ComprehensiveAdminService {
     })
   }
 
+  // ✅ NEW: Cancellation management methods
+  async getCancellations(filters?: {
+    reason?: string;
+    driverId?: string;
+    customerId?: string;
+    startDate?: string;
+    endDate?: string;
+    cancelledAtStage?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AdminServiceResponse<any[]>> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (filters?.reason) queryParams.append('reason', filters.reason);
+      if (filters?.driverId) queryParams.append('driverId', filters.driverId);
+      if (filters?.customerId) queryParams.append('customerId', filters.customerId);
+      if (filters?.startDate) queryParams.append('startDate', filters.startDate);
+      if (filters?.endDate) queryParams.append('endDate', filters.endDate);
+      if (filters?.cancelledAtStage) queryParams.append('cancelledAtStage', filters.cancelledAtStage);
+      if (filters?.limit) queryParams.append('limit', filters.limit.toString());
+      if (filters?.offset) queryParams.append('offset', filters.offset.toString());
+
+      const response = await apiService.get(`/api/admin/bookings/cancellations?${queryParams.toString()}`);
+      
+      if (response.success && response.data) {
+        const responseData = response.data as { cancellations?: any[]; pagination?: any };
+        return {
+          success: true,
+          data: responseData.cancellations || [],
+          pagination: responseData.pagination
+        };
+      }
+
+      return {
+        success: false,
+        error: {
+          code: 'GET_CANCELLATIONS_ERROR',
+          message: response.error?.message || 'Failed to get cancellations'
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error getting cancellations:', error);
+      return {
+        success: false,
+        error: {
+          code: 'GET_CANCELLATIONS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get cancellations'
+        }
+      };
+    }
+  }
+
+  async getCancellationDetails(bookingId: string): Promise<AdminServiceResponse<any>> {
+    try {
+      const response = await apiService.get(`/api/admin/bookings/${bookingId}/cancellation-details`);
+      
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data
+        };
+      }
+
+      return {
+        success: false,
+        error: {
+          code: 'GET_CANCELLATION_DETAILS_ERROR',
+          message: response.error?.message || 'Failed to get cancellation details'
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error getting cancellation details:', error);
+      return {
+        success: false,
+        error: {
+          code: 'GET_CANCELLATION_DETAILS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get cancellation details'
+        }
+      };
+    }
+  }
+
+  async getCancellationAnalytics(timeRange?: {
+    startDate?: string;
+    endDate?: string;
+    groupBy?: string;
+  }): Promise<AdminServiceResponse<any>> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (timeRange?.startDate) queryParams.append('startDate', timeRange.startDate);
+      if (timeRange?.endDate) queryParams.append('endDate', timeRange.endDate);
+      if (timeRange?.groupBy) queryParams.append('groupBy', timeRange.groupBy);
+
+      const response = await apiService.get(`/api/admin/analytics/cancellations?${queryParams.toString()}`);
+      
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data
+        };
+      }
+
+      return {
+        success: false,
+        error: {
+          code: 'GET_CANCELLATION_ANALYTICS_ERROR',
+          message: response.error?.message || 'Failed to get cancellation analytics'
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error getting cancellation analytics:', error);
+      return {
+        success: false,
+        error: {
+          code: 'GET_CANCELLATION_ANALYTICS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get cancellation analytics'
+        }
+      };
+    }
+  }
+
 }
 
 export const comprehensiveAdminService = new ComprehensiveAdminService()

@@ -104,6 +104,19 @@ interface Booking {
   customerName?: string
   driverName?: string
   driverVerified?: boolean
+  cancellation?: {
+    reason: string
+    reasonText?: string
+    cancelledAt: string
+    cancelledBy: 'driver' | 'customer' | 'admin'
+    cancelledAtStage?: string
+    evidencePhotos?: Array<{
+      photoId: string
+      photoUrl: string
+      uploadedAt: string
+      description?: string
+    }>
+  }
   packageDetails?: {
     weight: number
     description: string
@@ -371,6 +384,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   
   // Responsive and column visibility states
   const [visibleColumns, setVisibleColumns] = useState({
+    cancellation: true, // ✅ NEW: Cancellation column
     bookingId: true,
     customer: true,
     driver: true,
@@ -401,34 +415,37 @@ const ModernBookingManagement: React.FC = React.memo(() => {
     if (isMobile) {
       // Show only 4 essential columns on mobile for better readability
       setVisibleColumns({
+        cancellation: true,   // Keep - important for mobile
         bookingId: false,     // Hide - shown in detail view
         customer: true,       // Keep - primary identifier
         driver: false,        // Hide - shown in detail
-        pickup: false,        // Hide - shown in detail
-        contact: false,       // Hide - shown in detail
-        status: true,         // Keep - critical info
-        payment: false,       // Hide - shown in detail
-        fare: true,           // Keep - important for admin
-        created: false,       // Hide - less critical on mobile
+        pickup: false,       // Hide - shown in detail
+        contact: false,      // Hide - shown in detail
+        status: true,        // Keep - critical info
+        payment: false,      // Hide - shown in detail
+        fare: true,          // Keep - important for admin
+        created: false,      // Hide - less critical on mobile
         actions: true         // Keep - view/edit buttons
       })
     } else if (isTablet) {
       // Show 6 important columns on tablet
       setVisibleColumns({
+        cancellation: true,   // Keep - important for tablet
         bookingId: true,
         customer: true,
         driver: true,
-        pickup: false,        // Hide on tablet too
-        contact: false,       // Hide on tablet too
+        pickup: false,       // Hide on tablet too
+        contact: false,      // Hide on tablet too
         status: true,
         payment: true,
         fare: true,
-        created: false,       // Hide on tablet
+        created: false,      // Hide on tablet
         actions: true
       })
     } else {
       // Show all columns on desktop
       setVisibleColumns({
+        cancellation: true,   // Keep - important for desktop
         bookingId: true,
         customer: true,
         driver: true,
@@ -617,6 +634,18 @@ const ModernBookingManagement: React.FC = React.memo(() => {
               ) as any;
             }
 
+            // ✅ NEW: Include cancellation data if booking is cancelled
+            if (booking.status === 'cancelled' && booking.cancellation) {
+              normalizedBooking.cancellation = {
+                reason: booking.cancellation.reason || 'other',
+                reasonText: booking.cancellation.reasonText,
+                cancelledAt: booking.cancellation.cancelledAt || booking.cancelledAt || new Date().toISOString(),
+                cancelledBy: booking.cancellation.cancelledBy || booking.cancelledBy || 'driver',
+                cancelledAtStage: booking.cancellation.cancelledAtStage,
+                evidencePhotos: booking.cancellation.evidencePhotos || []
+              };
+            }
+
             return normalizedBooking;
           } catch (error) {
             console.error('Error normalizing booking:', error, booking)
@@ -771,6 +800,20 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   }, [fetchBookings])
 
   // Helper functions
+  // ✅ NEW: Helper function to get cancellation reason label
+  const getCancellationReasonLabel = useCallback((reason: string): string => {
+    const labels: { [key: string]: string } = {
+      'package_damaged': 'Package Damaged',
+      'wrong_item': 'Wrong Item',
+      'package_too_large': 'Too Large',
+      'prohibited_item': 'Prohibited',
+      'customer_unavailable': 'Customer Unavailable',
+      'wrong_address': 'Wrong Address',
+      'other': 'Other'
+    };
+    return labels[reason] || reason;
+  }, []);
+
   const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'pending': return theme.warning
@@ -827,7 +870,22 @@ const ModernBookingManagement: React.FC = React.memo(() => {
 
     // Apply status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(booking => booking.status === statusFilter)
+      if (statusFilter === 'cancelled_at_pickup') {
+        // ✅ NEW: Filter for cancellations at pickup stage
+        filtered = filtered.filter(booking => 
+          booking.status === 'cancelled' && 
+          booking.cancellation?.cancelledAtStage && 
+          (booking.cancellation.cancelledAtStage === 'photo_captured' || booking.cancellation.cancelledAtStage === 'driver_arrived')
+        )
+      } else if (statusFilter === 'cancelled_by_driver') {
+        // ✅ NEW: Filter for cancellations by driver
+        filtered = filtered.filter(booking => 
+          booking.status === 'cancelled' && 
+          booking.cancellation?.cancelledBy === 'driver'
+        )
+      } else {
+        filtered = filtered.filter(booking => booking.status === statusFilter)
+      }
     }
 
     // Apply date filter
@@ -1253,6 +1311,9 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                   <MenuItem value="in_progress">In Progress</MenuItem>
                   <MenuItem value="completed">Completed</MenuItem>
                   <MenuItem value="cancelled">Cancelled</MenuItem>
+                  {/* ✅ NEW: Cancellation sub-filters */}
+                  <MenuItem value="cancelled_at_pickup">Cancelled at Pickup</MenuItem>
+                  <MenuItem value="cancelled_by_driver">Cancelled by Driver</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -1472,6 +1533,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
             onClick={() => {
               // Reset to default
               setVisibleColumns({
+                cancellation: true,
                 bookingId: true,
                 customer: true,
                 driver: true,
@@ -1659,6 +1721,12 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                     </TableCell>
                   )}
                   
+                  {visibleColumns.cancellation && (
+                    <TableCell sx={{ fontWeight: 600, color: theme.primary, minWidth: 180 }}>
+                      Cancellation
+                    </TableCell>
+                  )}
+                  
                   {visibleColumns.payment && (
                     <TableCell sx={{ fontWeight: 600, color: theme.primary, minWidth: 100 }}>
                       Payment
@@ -1814,6 +1882,54 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                           }}
                           size="small"
                         />
+                      </TableCell>
+                    )}
+                    
+                    {visibleColumns.cancellation && (
+                      <TableCell>
+                        {booking.status === 'cancelled' && booking.cancellation ? (
+                          <Box display="flex" flexDirection="column" gap={0.5}>
+                            <Chip
+                              label={getCancellationReasonLabel(booking.cancellation.reason)}
+                              sx={{
+                                background: '#dc3545',
+                                color: 'white',
+                                fontWeight: 600,
+                                fontSize: '0.7rem',
+                                height: '24px'
+                              }}
+                              size="small"
+                            />
+                            {booking.cancellation.evidencePhotos && booking.cancellation.evidencePhotos.length > 0 && booking.cancellation.evidencePhotos[0]?.photoUrl && (
+                              <Box display="flex" alignItems="center" gap={0.5} mt={0.5}>
+                                <img
+                                  src={booking.cancellation.evidencePhotos[0].photoUrl}
+                                  alt="Evidence"
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 4,
+                                    objectFit: 'cover',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => {
+                                    setSelectedBooking(booking)
+                                    setViewDialogOpen(true)
+                                  }}
+                                />
+                                {booking.cancellation.evidencePhotos.length > 1 && (
+                                  <Typography variant="caption" color={theme.text.secondary}>
+                                    +{booking.cancellation.evidencePhotos.length - 1}
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color={theme.text.secondary}>
+                            -
+                          </Typography>
+                        )}
                       </TableCell>
                     )}
                     
@@ -2197,6 +2313,108 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                     </Grid>
                   </Grid>
                 </Box>
+
+                {/* ✅ NEW: Cancellation Details Section */}
+                {selectedBooking.status === 'cancelled' && selectedBooking.cancellation && (
+                  <Box mt={3}>
+                    <Typography variant="h6" gutterBottom color={theme.error}>
+                      Cancellation Details
+                    </Typography>
+                    <Box p={3} sx={{ background: '#fff5f5', borderRadius: 2, border: `1px solid ${theme.error}` }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                            Reason
+                          </Typography>
+                          <Chip
+                            label={getCancellationReasonLabel(selectedBooking.cancellation.reason)}
+                            sx={{
+                              background: theme.error,
+                              color: 'white',
+                              fontWeight: 600
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                            Cancelled By
+                          </Typography>
+                          <Typography variant="body1" fontWeight="600">
+                            {selectedBooking.cancellation.cancelledBy === 'driver' ? 'Driver' : 
+                             selectedBooking.cancellation.cancelledBy === 'customer' ? 'Customer' : 'Admin'}
+                          </Typography>
+                        </Grid>
+                        {selectedBooking.cancellation.reasonText && (
+                          <Grid item xs={12}>
+                            <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                              Additional Details
+                            </Typography>
+                            <Typography variant="body1">
+                              {selectedBooking.cancellation.reasonText}
+                            </Typography>
+                          </Grid>
+                        )}
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                            Cancelled At
+                          </Typography>
+                          <Typography variant="body1">
+                            {new Date(selectedBooking.cancellation.cancelledAt).toLocaleString()}
+                          </Typography>
+                        </Grid>
+                        {selectedBooking.cancellation.cancelledAtStage && (
+                          <Grid item xs={12} md={6}>
+                            <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                              Cancelled At Stage
+                            </Typography>
+                            <Typography variant="body1">
+                              {selectedBooking.cancellation.cancelledAtStage === 'photo_captured' ? 'Photo Captured' : 
+                               selectedBooking.cancellation.cancelledAtStage === 'driver_arrived' ? 'Driver Arrived' : 
+                               selectedBooking.cancellation.cancelledAtStage}
+                            </Typography>
+                          </Grid>
+                        )}
+                        {selectedBooking.cancellation.evidencePhotos && selectedBooking.cancellation.evidencePhotos.length > 0 && (
+                          <Grid item xs={12}>
+                            <Typography variant="body2" color={theme.text.secondary} gutterBottom>
+                              Evidence Photos
+                            </Typography>
+                            <Box display="flex" gap={2} flexWrap="wrap" mt={1}>
+                              {selectedBooking.cancellation.evidencePhotos.map((photo, index) => (
+                                <Box
+                                  key={photo.photoId || index}
+                                  sx={{
+                                    position: 'relative',
+                                    cursor: 'pointer',
+                                    '&:hover': { opacity: 0.8 }
+                                  }}
+                                  onClick={() => window.open(photo.photoUrl, '_blank')}
+                                >
+                                  <img
+                                    src={photo.photoUrl}
+                                    alt={`Evidence ${index + 1}`}
+                                    style={{
+                                      width: 120,
+                                      height: 120,
+                                      objectFit: 'cover',
+                                      borderRadius: 8,
+                                      border: `2px solid ${theme.error}`
+                                    }}
+                                  />
+                                  {photo.description && (
+                                    <Typography variant="caption" display="block" mt={0.5}>
+                                      {photo.description}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ))}
+                            </Box>
+                          </Grid>
+                        )}
+                      </Grid>
+                    </Box>
+                  </Box>
+                )}
               </Grid>
 
               <Grid item xs={12}>

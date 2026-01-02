@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   Box,
   Typography,
@@ -18,6 +17,7 @@ import {
   Tooltip,
   useMediaQuery,
   useTheme,
+  CircularProgress,
 } from '@mui/material'
 import {
   BarChart,
@@ -43,11 +43,12 @@ import {
   Assessment as AssessmentIcon,
   People as PeopleIcon,
 } from '@mui/icons-material'
-import React, { useEffect } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
 import { fetchAnalytics, setTimeRange, clearError } from '../store/slices/analyticsSlice'
+import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 
 const Analytics: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -65,6 +66,27 @@ const Analytics: React.FC = () => {
   // const [selectedMetric, setSelectedMetric] = useState('bookings')
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // ✅ NEW: Cancellation analytics state
+  const [cancellationAnalytics, setCancellationAnalytics] = useState<any>(null)
+  const [cancellationLoading, setCancellationLoading] = useState(false)
+
+  // ✅ NEW: Fetch cancellation analytics
+  const fetchCancellationAnalytics = useCallback(async () => {
+    try {
+      setCancellationLoading(true)
+      const response = await comprehensiveAdminService.getCancellationAnalytics({
+        startDate: timeRange.start,
+        endDate: timeRange.end
+      })
+      if (response.success && response.data) {
+        setCancellationAnalytics(response.data)
+      }
+    } catch (err) {
+      console.error('Error fetching cancellation analytics:', err)
+    } finally {
+      setCancellationLoading(false)
+    }
+  }, [timeRange])
 
   useEffect(() => {
     // ✅ FIX: Fetch analytics data - errors will be handled by Redux state
@@ -73,7 +95,9 @@ const Analytics: React.FC = () => {
       end: timeRange.end,
       metrics: ['drivers', 'bookings', 'revenue']
     }))
-  }, [dispatch, timeRange])
+    // ✅ NEW: Fetch cancellation analytics
+    fetchCancellationAnalytics()
+  }, [dispatch, timeRange, fetchCancellationAnalytics])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -387,6 +411,155 @@ const Analytics: React.FC = () => {
                   <Bar dataKey="value" fill="#8884d8" />
                 </BarChart>
               </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* ✅ NEW: Cancellation Analytics Charts */}
+        <Grid item xs={12}>
+          <Typography variant="h5" gutterBottom sx={{ mt: 3, mb: 2, fontWeight: 600, color: '#dc3545' }}>
+            Cancellation Analytics
+          </Typography>
+        </Grid>
+
+        {/* Cancellations Over Time */}
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Cancellations Over Time
+              </Typography>
+              {cancellationLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={chartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <LineChart data={cancellationAnalytics?.dailyDistribution || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date"
+                      tick={{ fontSize: isMobile ? 10 : 12 }}
+                      angle={isMobile ? -45 : 0}
+                      textAnchor={isMobile ? "end" : "middle"}
+                      height={isMobile ? 60 : 30}
+                    />
+                    <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
+                    <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
+                    <Legend 
+                      wrapperStyle={{ fontSize: isMobile ? '11px' : '13px', paddingTop: isMobile ? '10px' : '5px' }}
+                      iconSize={isMobile ? 8 : 14}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="count"
+                      stroke="#dc3545"
+                      strokeWidth={2}
+                      name="Cancellations"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Cancellation Reasons */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Cancellation Reasons
+              </Typography>
+              {cancellationLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={pieChartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <ResponsiveContainer width="100%" height={pieChartHeight}>
+                  <PieChart>
+                    <Pie
+                      data={cancellationAnalytics?.byReason || []}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={isMobile ? false : ({ label, percent }) => `${label} ${((percent || 0) * 100).toFixed(0)}%`}
+                      outerRadius={isMobile ? 60 : 80}
+                      fill="#8884d8"
+                      dataKey="count"
+                    >
+                      {(cancellationAnalytics?.byReason || []).map((_entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={['#dc3545', '#ff6b6b', '#ffa500', '#ffd700', '#90ee90', '#87ceeb', '#dda0dd'][index % 7]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Driver Cancellation Rates */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Driver Cancellation Rates
+              </Typography>
+              {cancellationLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={chartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart 
+                    data={(cancellationAnalytics?.byDriver || []).slice(0, 10)}
+                    layout="vertical"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tick={{ fontSize: isMobile ? 10 : 12 }} />
+                    <YAxis 
+                      type="category" 
+                      dataKey="driverName"
+                      tick={{ fontSize: isMobile ? 10 : 12 }}
+                      width={isMobile ? 80 : 120}
+                    />
+                    <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
+                    <Bar dataKey="cancellationCount" fill="#dc3545" name="Cancellations" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Hourly Distribution */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Cancellations by Hour
+              </Typography>
+              {cancellationLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={chartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart data={cancellationAnalytics?.hourlyDistribution || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="hour"
+                      tick={{ fontSize: isMobile ? 10 : 12 }}
+                      label={{ value: 'Hour of Day', position: 'insideBottom', offset: -5 }}
+                    />
+                    <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
+                    <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
+                    <Bar dataKey="count" fill="#dc3545" name="Cancellations" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </Grid>

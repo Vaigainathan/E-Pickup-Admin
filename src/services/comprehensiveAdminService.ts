@@ -562,9 +562,10 @@ class ComprehensiveAdminService {
             balance: walletBalance,
             lastUpdated: new Date().toISOString()
           },
-          // ✅ CRITICAL FIX: Check document verification status FIRST - driver is ONLY verified if ALL documents are verified
+          // ✅ CRITICAL FIX: Check document verification status with safety for already-verified working drivers
           status: (() => {
-            const driverDocs = data.driver?.documents || {}
+            // ✅ CRITICAL: Check documents from multiple possible locations
+            const driverDocs = data.driver?.documents || data.documents || {}
             const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
@@ -572,16 +573,22 @@ class ComprehensiveAdminService {
             
             // Check each required document
             requiredDocTypes.forEach(docType => {
-              const doc = driverDocs[docType]
+              // Try both camelCase and snake_case keys
+              const camelKey = docType
+              const snakeKey = docType.replace(/([A-Z])/g, '_$1').toLowerCase()
+              const doc = driverDocs[camelKey] || driverDocs[snakeKey]
+              
               if (doc && (doc.url || doc.downloadURL)) {
                 totalDocs++
                 // Check multiple verification status fields
                 const isDocVerified = doc.status === 'verified' || 
                                      doc.verified === true || 
                                      doc.verificationStatus === 'verified' ||
-                                     doc.verificationStatus === 'approved'
+                                     doc.verificationStatus === 'approved' ||
+                                     doc.status === 'approved'
                 const isDocRejected = doc.status === 'rejected' || 
-                                     doc.verificationStatus === 'rejected'
+                                     doc.verificationStatus === 'rejected' ||
+                                     doc.rejected === true
                 
                 if (isDocVerified) {
                   verifiedDocs++
@@ -591,9 +598,11 @@ class ComprehensiveAdminService {
               }
             })
             
-            // ✅ CRITICAL: Driver is ONLY verified if ALL required documents are verified
-            if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
-              return 'verified'
+            // ✅ CRITICAL: Check documents FIRST - this is the source of truth
+            
+            // If no documents uploaded at all → not_uploaded (clear status)
+            if (totalDocs === 0) {
+              return 'not_uploaded'
             }
             
             // If any document is rejected, driver is rejected
@@ -601,42 +610,127 @@ class ComprehensiveAdminService {
               return 'rejected'
             }
             
-            // If documents are uploaded but not all verified, status is pending_verification
+            // ✅ CRITICAL: Driver is verified if ALL required documents are verified
+            // Check this FIRST before any other conditions
+            if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
+              console.log(`✅ Driver has all ${requiredDocTypes.length} documents verified - setting status to 'verified'`)
+              return 'verified'
+            }
+            
+            // ✅ SAFETY CHECK: Only preserve verified status if driver was verified AND has verified documents
+            // This prevents breaking already-verified drivers who have verified documents
+            const wasAlreadyVerified = data.driver?.verificationStatus === 'verified' || 
+                                      data.driver?.verificationStatus === 'approved' ||
+                                      data.driver?.isVerified === true ||
+                                      data.isVerified === true ||
+                                      data.verificationStatus === 'verified' ||
+                                      data.verificationStatus === 'approved'
+            
+            const isWorking = (data.totalTrips && data.totalTrips > 0) || 
+                            (data.totalDeliveries && data.totalDeliveries > 0) ||
+                            data.isActive === true
+            
+            // Only preserve if driver was verified AND has verified documents (not if no documents found)
+            if (wasAlreadyVerified && verifiedDocs > 0 && rejectedDocs === 0) {
+              if (verifiedDocs === requiredDocTypes.length) {
+                // All documents verified - definitely verified
+                console.log(`✅ Preserving verified status - all documents verified (${verifiedDocs}/${totalDocs})`)
+                return 'verified'
+              } else if (isWorking && verifiedDocs > 0) {
+                // Driver is working and has some verified documents - preserve verified status
+                // This handles cases where documents might be in different format but driver is working
+                console.log(`✅ Preserving verified status for working driver (was verified, is working, has ${verifiedDocs}/${totalDocs} verified documents)`)
+                return 'verified'
+              }
+            }
+            
+            // If documents uploaded but not all verified → pending_verification
             if (totalDocs > 0 && verifiedDocs < requiredDocTypes.length) {
               return 'pending_verification'
             }
             
-            // Fallback to driver.verificationStatus if no documents found
-            if (data.driver?.verificationStatus === 'rejected') {
-              return 'rejected'
-            }
-            
-            // Default to pending if no documents uploaded
-            return 'pending'
+            // Default to pending_verification if documents uploaded but not all verified
+            return 'pending_verification'
           })(),
-          // ✅ CRITICAL: isVerified is ONLY true if ALL documents are verified
+            // ✅ CRITICAL: isVerified check - check documents FIRST
           isVerified: (() => {
-            const driverDocs = data.driver?.documents || {}
+            // ✅ CRITICAL: Check documents from multiple possible locations
+            const driverDocs = data.driver?.documents || data.documents || {}
             const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
+            let rejectedDocs = 0
             
             requiredDocTypes.forEach(docType => {
-              const doc = driverDocs[docType]
+              // Try both camelCase and snake_case keys
+              const camelKey = docType
+              const snakeKey = docType.replace(/([A-Z])/g, '_$1').toLowerCase()
+              const doc = driverDocs[camelKey] || driverDocs[snakeKey]
+              
               if (doc && (doc.url || doc.downloadURL)) {
                 totalDocs++
                 const isDocVerified = doc.status === 'verified' || 
                                      doc.verified === true || 
                                      doc.verificationStatus === 'verified' ||
-                                     doc.verificationStatus === 'approved'
+                                     doc.verificationStatus === 'approved' ||
+                                     doc.status === 'approved'
+                const isDocRejected = doc.status === 'rejected' || 
+                                     doc.verificationStatus === 'rejected' ||
+                                     doc.rejected === true
                 if (isDocVerified) {
                   verifiedDocs++
+                } else if (isDocRejected) {
+                  rejectedDocs++
                 }
               }
             })
             
-            // ONLY return true if ALL required documents are verified
-            return totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length
+            // ✅ CRITICAL: Driver is verified if ALL required documents are verified
+            // Check this FIRST before any other conditions
+            if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
+              console.log(`✅ Driver has all ${requiredDocTypes.length} documents verified - setting isVerified to true`)
+              return true
+            }
+            
+            // ✅ SAFETY CHECK: Only preserve verified status if driver was verified AND has verified documents
+            // This prevents breaking already-verified drivers who have verified documents
+            const wasAlreadyVerified = data.driver?.verificationStatus === 'verified' || 
+                                      data.driver?.verificationStatus === 'approved' ||
+                                      data.driver?.isVerified === true ||
+                                      data.isVerified === true ||
+                                      data.verificationStatus === 'verified' ||
+                                      data.verificationStatus === 'approved'
+            
+            const isWorking = (data.totalTrips && data.totalTrips > 0) || 
+                            (data.totalDeliveries && data.totalDeliveries > 0) ||
+                            data.isActive === true
+            
+            // Only preserve if driver was verified AND has verified documents (not if no documents found)
+            if (wasAlreadyVerified && verifiedDocs > 0 && rejectedDocs === 0) {
+              if (verifiedDocs === requiredDocTypes.length) {
+                // All documents verified - definitely verified
+                console.log(`✅ Preserving isVerified=true - all documents verified (${verifiedDocs}/${totalDocs})`)
+                return true
+              } else if (isWorking && verifiedDocs > 0) {
+                // Driver is working and has some verified documents - preserve verified status
+                // This handles cases where documents might be in different format but driver is working
+                console.log(`✅ Preserving isVerified=true for working driver (was verified, is working, has ${verifiedDocs}/${totalDocs} verified documents)`)
+                return true
+              }
+            }
+            
+            // ✅ CRITICAL: If no documents uploaded → NOT verified
+            if (totalDocs === 0) {
+              return false
+            }
+            
+            // ✅ CRITICAL: If documents uploaded but not all verified → NOT verified
+            if (totalDocs > 0 && verifiedDocs < requiredDocTypes.length) {
+              return false
+            }
+            
+            // ✅ CRITICAL: For new drivers or drivers without verified documents, strict check applies
+            return false
           })(),
           createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()

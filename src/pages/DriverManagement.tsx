@@ -244,6 +244,86 @@ const PulseBadge = styled(Badge)(() => ({
   },
 }))
 
+// ✅ Helper function to get clear verification status label and color
+const getVerificationStatus = (driver: any) => {
+  // ✅ CRITICAL FIX: Check documents FIRST - documents are the source of truth
+  // This ensures verified drivers show as verified even if isVerified/status fields are incorrect
+  const documents = driver?.documents || (driver as any)?.driver?.documents || {}
+  const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
+  let totalDocs = 0
+  let verifiedDocs = 0
+  let rejectedDocs = 0
+  
+  requiredDocTypes.forEach(docType => {
+    // Try both camelCase and snake_case keys
+    const camelKey = docType
+    const snakeKey = docType.replace(/([A-Z])/g, '_$1').toLowerCase()
+    const doc = documents[camelKey as keyof typeof documents] || documents[snakeKey as keyof typeof documents]
+    
+    if (doc && (doc.url || doc.downloadURL)) {
+      totalDocs++
+      const isDocVerified = doc.status === 'verified' || 
+                           doc.verified === true || 
+                           doc.verificationStatus === 'verified' ||
+                           doc.verificationStatus === 'approved' ||
+                           doc.status === 'approved'
+      const isDocRejected = doc.status === 'rejected' || 
+                           doc.verificationStatus === 'rejected' ||
+                           doc.rejected === true
+      
+      if (isDocVerified) {
+        verifiedDocs++
+      } else if (isDocRejected) {
+        rejectedDocs++
+      }
+    }
+  })
+  
+  // ✅ CRITICAL: If all documents are verified, show as Verified (regardless of isVerified/status fields)
+  // This is the source of truth - if all documents are verified, driver is verified
+  if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
+    return { label: 'Verified', color: 'success' as const }
+  }
+  
+  // ✅ CRITICAL: If any document is rejected, show as Rejected
+  if (rejectedDocs > 0) {
+    return { label: 'Rejected', color: 'error' as const }
+  }
+  
+  // ✅ CRITICAL: If no documents uploaded at all, show as Not Uploaded
+  if (totalDocs === 0) {
+    return { label: 'Not Uploaded', color: 'default' as const }
+  }
+  
+  // ✅ CRITICAL: If documents uploaded but not all verified, show as Pending Verification
+  if (totalDocs > 0 && verifiedDocs < requiredDocTypes.length) {
+    return { label: 'Pending Verification', color: 'warning' as const }
+  }
+  
+  // ✅ FALLBACK: If documents can't be determined (e.g., documents object is empty or malformed),
+  // check isVerified/status fields as a last resort
+  // BUT: Only trust these if driver was already verified - don't downgrade verified drivers
+  if (driver.isVerified === true || driver.status === 'verified' || driver.status === 'approved') {
+    // Driver is marked as verified - trust this status (might be verified but documents not accessible)
+    return { label: 'Verified', color: 'success' as const }
+  }
+  
+  if (driver.status === 'not_uploaded') {
+    return { label: 'Not Uploaded', color: 'default' as const }
+  }
+  
+  if (driver.status === 'pending_verification' || driver.status === 'pending') {
+    return { label: 'Pending Verification', color: 'warning' as const }
+  }
+  
+  if (driver.status === 'rejected') {
+    return { label: 'Rejected', color: 'error' as const }
+  }
+  
+  // Default fallback
+  return { label: 'Pending Verification', color: 'warning' as const }
+}
+
 const ModernDriverManagement: React.FC = React.memo(() => {
   // const navigate = useNavigate() // Removed unused variable
   const theme = useTheme()
@@ -340,82 +420,143 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       const response = await comprehensiveAdminService.getDrivers()
       
       if (response.success && response.data) {
-        const driversData = (response.data as any[]).map((driver: any) => ({
-          ...driver,
-          // Ensure proper data structure with validation
-          personalInfo: {
-            name: driver?.personalInfo?.name || driver?.name || 'Driver',
-            email: driver?.personalInfo?.email || driver?.email || '',
-            phone: driver?.personalInfo?.phone || driver?.phone || '',
-            dateOfBirth: driver?.personalInfo?.dateOfBirth || driver?.dateOfBirth || '',
-            address: driver?.personalInfo?.address || driver?.address || ''
-          },
-          vehicleInfo: {
-            make: driver?.vehicleInfo?.make || driver?.vehicle?.make || 'Unknown',
-            model: driver?.vehicleInfo?.model || driver?.vehicle?.model || 'Unknown',
-            year: driver?.vehicleInfo?.year || driver?.vehicle?.year || new Date().getFullYear(),
-            color: driver?.vehicleInfo?.color || driver?.vehicle?.color || 'Unknown',
-            plateNumber: driver?.vehicleInfo?.plateNumber || driver?.vehicle?.plateNumber || 'Unknown'
-          },
-          // CRITICAL FIX: Add vehicleDetails mapping for admin dashboard display
-          vehicleDetails: driver?.driver?.vehicleDetails || driver?.vehicleDetails || {
-            vehicleType: driver?.vehicleInfo?.make || 'motorcycle',
-            vehicleNumber: driver?.vehicleInfo?.plateNumber || 'Not provided',
-            vehicleModel: driver?.vehicleInfo?.model || 'Not provided',
-            licenseNumber: driver?.driver?.vehicleDetails?.licenseNumber || 'Not provided',
-            licenseExpiry: driver?.driver?.vehicleDetails?.licenseExpiry || 'Not provided',
-            
-          },
-          // ✅ CRITICAL FIX: Enhanced verification status calculation - ONLY verify if ALL documents are verified
-          isVerified: (() => {
-            // Check if all required documents are verified - read from multiple possible locations
-            const documents = driver?.documents || driver?.driver?.documents || {}
-            const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
-            let verifiedDocs = 0
-            let totalDocs = 0
-            let rejectedDocs = 0
-            
-            requiredDocTypes.forEach(docType => {
-              const doc = documents[docType as keyof Driver['documents']]
-              if (doc && (doc.url || doc.downloadURL)) {
-                totalDocs++
-                // Check multiple verification status fields
-                const isDocVerified = doc.status === 'verified' || 
-                                     doc.verified === true || 
-                                     doc.verificationStatus === 'verified' ||
-                                     doc.verificationStatus === 'approved'
-                const isDocRejected = doc.status === 'rejected' || 
-                                     doc.verificationStatus === 'rejected'
+        const driversData = (response.data as any[]).map((driver: any) => {
+          // ✅ CRITICAL: Preserve isVerified from service FIRST - this is the source of truth
+          // The service already calculated this correctly based on documents
+          const serviceIsVerified = driver.isVerified;
+          
+          return {
+            ...driver,
+            // ✅ CRITICAL: Preserve status field from service (not_uploaded, pending_verification, verified, rejected)
+            status: driver.status || 'pending',
+            // Ensure proper data structure with validation
+            personalInfo: {
+              name: driver?.personalInfo?.name || driver?.name || 'Driver',
+              email: driver?.personalInfo?.email || driver?.email || '',
+              phone: driver?.personalInfo?.phone || driver?.phone || '',
+              dateOfBirth: driver?.personalInfo?.dateOfBirth || driver?.dateOfBirth || '',
+              address: driver?.personalInfo?.address || driver?.address || ''
+            },
+            vehicleInfo: {
+              make: driver?.vehicleInfo?.make || driver?.vehicle?.make || 'Unknown',
+              model: driver?.vehicleInfo?.model || driver?.vehicle?.model || 'Unknown',
+              year: driver?.vehicleInfo?.year || driver?.vehicle?.year || new Date().getFullYear(),
+              color: driver?.vehicleInfo?.color || driver?.vehicle?.color || 'Unknown',
+              plateNumber: driver?.vehicleInfo?.plateNumber || driver?.vehicle?.plateNumber || 'Unknown'
+            },
+            // CRITICAL FIX: Add vehicleDetails mapping for admin dashboard display
+            vehicleDetails: driver?.driver?.vehicleDetails || driver?.vehicleDetails || {
+              vehicleType: driver?.vehicleInfo?.make || 'motorcycle',
+              vehicleNumber: driver?.vehicleInfo?.plateNumber || 'Not provided',
+              vehicleModel: driver?.vehicleInfo?.model || 'Not provided',
+              licenseNumber: driver?.driver?.vehicleDetails?.licenseNumber || 'Not provided',
+              licenseExpiry: driver?.driver?.vehicleDetails?.licenseExpiry || 'Not provided',
+            },
+            // ✅ CRITICAL FIX: Use isVerified from service if available, otherwise calculate as fallback
+            // The service already calculated this correctly, so we preserve it
+            isVerified: (() => {
+              // ✅ CRITICAL: If service already calculated isVerified, use it (it's the source of truth)
+              if (serviceIsVerified !== undefined) {
+                return serviceIsVerified;
+              }
+              
+              // ✅ FALLBACK: Only calculate if service didn't provide it
+              // Check if all required documents are verified - read from multiple possible locations
+              const documents = driver?.documents || driver?.driver?.documents || {};
+              const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto'];
+              
+              // ✅ SAFETY CHECK: Check if driver was already verified BEFORE checking documents
+              const wasAlreadyVerified = driver?.driver?.verificationStatus === 'verified' || 
+                                        driver?.driver?.verificationStatus === 'approved' ||
+                                        driver?.verificationStatus === 'verified' ||
+                                        driver?.verificationStatus === 'approved' ||
+                                        driver?.driver?.isVerified === true ||
+                                        driver?.isVerified === true;
+              
+              const isWorking = (driver?.totalTrips && driver.totalTrips > 0) || 
+                              (driver?.totalDeliveries && driver.totalDeliveries > 0) ||
+                              driver?.isActive === true ||
+                              driver?.isOnline === true;
+              
+              let verifiedDocs = 0;
+              let totalDocs = 0;
+              let rejectedDocs = 0;
+              
+              requiredDocTypes.forEach(docType => {
+                // Try both camelCase and snake_case keys
+                const camelKey = docType;
+                const snakeKey = docType.replace(/([A-Z])/g, '_$1').toLowerCase();
+                const doc = documents[camelKey as keyof Driver['documents']] || documents[snakeKey as keyof Driver['documents']];
                 
-                if (isDocVerified) {
-                  verifiedDocs++
-                } else if (isDocRejected) {
-                  rejectedDocs++
+                if (doc && (doc.url || doc.downloadURL)) {
+                  totalDocs++;
+                  // Check multiple verification status fields - be more lenient for already-verified drivers
+                  const isDocVerified = doc.status === 'verified' || 
+                                       doc.verified === true || 
+                                       doc.verificationStatus === 'verified' ||
+                                       doc.verificationStatus === 'approved' ||
+                                       doc.status === 'approved' ||
+                                       // If document has URL and no explicit rejection, consider it verified if driver was verified and working
+                                       (wasAlreadyVerified && isWorking && doc.url && !doc.status && !doc.verificationStatus && !doc.rejected);
+                  const isDocRejected = doc.status === 'rejected' || 
+                                       doc.verificationStatus === 'rejected' ||
+                                       doc.rejected === true;
+                  
+                  if (isDocVerified) {
+                    verifiedDocs++;
+                  } else if (isDocRejected) {
+                    rejectedDocs++;
+                  }
+                }
+              });
+              
+              // ✅ CRITICAL: Driver is verified if ALL required documents are verified
+              if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
+                return true;
+              }
+              
+              // ✅ CRITICAL: Check documents FIRST - this is the source of truth
+              // If no documents uploaded at all → NOT verified
+              if (totalDocs === 0) {
+                return false;
+              }
+              
+              // ✅ CRITICAL: If documents uploaded but not all verified → NOT verified
+              if (totalDocs > 0 && verifiedDocs < requiredDocTypes.length) {
+                return false;
+              }
+              
+              // ✅ SAFETY CHECK: Only preserve verified status if driver was verified AND has verified documents
+              // This prevents breaking already-verified drivers who have verified documents
+              if (wasAlreadyVerified && verifiedDocs > 0 && rejectedDocs === 0) {
+                // If driver has verified documents and was verified, preserve status
+                // But only if we found verified documents (not if no documents found)
+                if (verifiedDocs === requiredDocTypes.length) {
+                  // All documents verified - definitely verified
+                  return true;
+                } else if (isWorking && verifiedDocs > 0) {
+                  // Driver is working and has some verified documents - preserve verified status
+                  // This handles cases where documents might be in different format but driver is working
+                  console.log(`✅ Preserving verified status for working driver (was verified, is working, has ${verifiedDocs}/${totalDocs} verified documents)`);
+                  return true;
                 }
               }
-            })
-            
-            // ✅ CRITICAL: Driver is ONLY verified if ALL required documents are verified
-            // AND all documents are uploaded
-            if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
-              return true
-            }
-            
-            // ✅ CRITICAL: If documents are uploaded but not all verified, driver is NOT verified
-            // Even if driver.verificationStatus says 'verified', we check documents first
-            return false
-          })(),
-          rating: Math.max(0, Math.min(5, driver?.rating || 0)), // Clamp rating between 0-5
-          totalTrips: Math.max(0, driver?.totalTrips || 0), // Ensure non-negative
-          earnings: {
-            total: Math.max(0, driver?.earnings?.total || 0),
-            thisMonth: Math.max(0, driver?.earnings?.thisMonth || 0),
-            lastMonth: Math.max(0, driver?.earnings?.lastMonth || 0)
-          },
-          createdAt: driver?.createdAt || new Date().toISOString()
-        }))
+              
+              // ✅ CRITICAL: For new drivers or drivers without verified documents, strict check applies
+              return false;
+            })(),
+            rating: Math.max(0, Math.min(5, driver?.rating || 0)), // Clamp rating between 0-5
+            totalTrips: Math.max(0, driver?.totalTrips || 0), // Ensure non-negative
+            earnings: {
+              total: Math.max(0, driver?.earnings?.total || 0),
+              thisMonth: Math.max(0, driver?.earnings?.thisMonth || 0),
+              lastMonth: Math.max(0, driver?.earnings?.lastMonth || 0)
+            },
+            createdAt: driver?.createdAt || new Date().toISOString()
+          }
+        });
         
-        setDrivers(driversData)
+        setDrivers(driversData);
         setLastRefreshTime(new Date())
         setLastUpdated(new Date())
         setRetryCount(0)
@@ -1054,8 +1195,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
           {/* Status Chips */}
           <Box display="flex" alignItems="center" gap={1} mb={3} flexWrap="wrap">
             <Chip
-              label={driver.isVerified ? 'Verified' : 'Pending'}
-              color={driver.isVerified ? 'success' : 'warning'}
+              label={getVerificationStatus(driver).label}
+              color={getVerificationStatus(driver).color}
               size="small"
               sx={{ 
                 fontWeight: 600,
@@ -2304,8 +2445,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={driver.isVerified ? 'Verified' : 'Pending'}
-                            color={driver.isVerified ? 'success' : 'warning'}
+                            label={getVerificationStatus(driver).label}
+                            color={getVerificationStatus(driver).color}
                             size="small"
                           />
                         </TableCell>

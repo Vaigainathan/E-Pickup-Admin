@@ -95,8 +95,8 @@ export interface Driver {
     canWork?: boolean
     lastUpdated?: string
   }
-  status: 'pending' | 'verified' | 'rejected' | 'suspended' | 'blocked' | 'active' | string
-  verificationStatus?: 'pending' | 'verified' | 'rejected' | string
+  status: 'pending' | 'verified' | 'rejected' | 'suspended' | 'blocked' | 'active' | 'not_uploaded' | 'pending_verification' | string
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | 'not_uploaded' | 'pending_verification' | string
   isVerified?: boolean
   createdAt: string
   updatedAt?: string

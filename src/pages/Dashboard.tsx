@@ -402,14 +402,15 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             color: driver?.vehicleInfo?.color || driver?.vehicle?.color || 'Unknown',
             plateNumber: driver?.vehicleInfo?.plateNumber || driver?.vehicle?.plateNumber || 'Unknown'
           },
-          // ✅ CRITICAL FIX: Ensure status and verification flags - ONLY verify if ALL documents are verified
+          // ✅ CRITICAL FIX: Ensure status and verification flags - check documents FIRST
           isActive: driver?.isActive !== false,
-          // Check document verification status - driver is ONLY verified if ALL documents are verified
+          // Check document verification status - documents are source of truth
           isVerified: (() => {
             const documents = driver?.documents || driver?.driver?.documents || {}
             const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
+            let rejectedDocs = 0
             
             requiredDocTypes.forEach(docType => {
               const doc = documents[docType]
@@ -419,14 +420,51 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                                      doc.verified === true || 
                                      doc.verificationStatus === 'verified' ||
                                      doc.verificationStatus === 'approved'
+                const isDocRejected = doc.status === 'rejected' || 
+                                     doc.verificationStatus === 'rejected'
                 if (isDocVerified) {
                   verifiedDocs++
+                } else if (isDocRejected) {
+                  rejectedDocs++
                 }
               }
             })
             
-            // ONLY return true if ALL required documents are verified
-            return totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length
+            // ✅ CRITICAL: If no documents uploaded → NOT verified
+            if (totalDocs === 0) {
+              return false
+            }
+            
+            // ✅ CRITICAL: Driver is verified if ALL required documents are verified
+            if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
+              return true
+            }
+            
+            // ✅ SAFETY CHECK: Only preserve verified status if driver was verified AND has verified documents
+            const wasAlreadyVerified = driver?.driver?.verificationStatus === 'verified' || 
+                                      driver?.driver?.verificationStatus === 'approved' ||
+                                      driver?.verificationStatus === 'verified' ||
+                                      driver?.verificationStatus === 'approved' ||
+                                      driver?.driver?.isVerified === true ||
+                                      driver?.isVerified === true
+            
+            const isWorking = (driver?.totalTrips && driver.totalTrips > 0) || 
+                            (driver?.totalDeliveries && driver.totalDeliveries > 0) ||
+                            driver?.isActive === true
+            
+            // Only preserve if driver was verified AND has verified documents (not if no documents found)
+            if (wasAlreadyVerified && verifiedDocs > 0 && rejectedDocs === 0) {
+              if (verifiedDocs === requiredDocTypes.length) {
+                // All documents verified - definitely verified
+                return true
+              } else if (isWorking && verifiedDocs > 0) {
+                // Driver is working and has some verified documents - preserve verified status
+                return true
+              }
+            }
+            
+            // For new drivers or drivers without verified documents, strict check applies
+            return false
           })(),
           status: driver?.status || 'pending',
           createdAt: driver?.createdAt || new Date().toISOString()

@@ -49,6 +49,7 @@ import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
 import { fetchAnalytics, setTimeRange, clearError } from '../store/slices/analyticsSlice'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
+import { analyticsService } from '../services/analyticsService'
 
 const Analytics: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -69,6 +70,17 @@ const Analytics: React.FC = () => {
   // ✅ NEW: Cancellation analytics state
   const [cancellationAnalytics, setCancellationAnalytics] = useState<any>(null)
   const [cancellationLoading, setCancellationLoading] = useState(false)
+  // Revenue analytics state
+  const [revenueTrends, setRevenueTrends] = useState<any[]>([])
+  const [realMoneyRevenue, setRealMoneyRevenue] = useState<any>(null)
+  const [revenueLoading, setRevenueLoading] = useState(false)
+  // Booking analytics state
+  const [bookingAnalytics, setBookingAnalytics] = useState<any>(null)
+  const [bookingAnalyticsLoading, setBookingAnalyticsLoading] = useState(false)
+  // Driver analytics state
+  const [driverAnalytics, setDriverAnalytics] = useState<any>(null)
+  // Support analytics state
+  const [supportAnalytics, setSupportAnalytics] = useState<any>(null)
 
   // ✅ NEW: Fetch cancellation analytics
   const fetchCancellationAnalytics = useCallback(async () => {
@@ -88,6 +100,65 @@ const Analytics: React.FC = () => {
     }
   }, [timeRange])
 
+  // Fetch revenue trends and real-money revenue
+  const fetchRevenueAnalytics = useCallback(async () => {
+    try {
+      setRevenueLoading(true)
+      const [trendsResponse, realMoneyResponse] = await Promise.all([
+        comprehensiveAdminService.getRevenueTrends(timeRange.start, timeRange.end),
+        comprehensiveAdminService.getRealMoneyRevenue(timeRange.start, timeRange.end)
+      ])
+      
+      if (trendsResponse.success && trendsResponse.data) {
+        setRevenueTrends(Array.isArray(trendsResponse.data) ? trendsResponse.data : [])
+      }
+      
+      if (realMoneyResponse.success && realMoneyResponse.data) {
+        setRealMoneyRevenue(realMoneyResponse.data)
+      }
+    } catch (err) {
+      console.error('Error fetching revenue analytics:', err)
+    } finally {
+      setRevenueLoading(false)
+    }
+  }, [timeRange])
+
+  // Fetch booking analytics
+  const fetchBookingAnalytics = useCallback(async () => {
+    try {
+      setBookingAnalyticsLoading(true)
+      const data = await analyticsService.getBookingAnalytics(timeRange.start, timeRange.end)
+      setBookingAnalytics(data)
+    } catch (err) {
+      console.error('Error fetching booking analytics:', err)
+      setBookingAnalytics(null)
+    } finally {
+      setBookingAnalyticsLoading(false)
+    }
+  }, [timeRange])
+
+  // Fetch driver analytics
+  const fetchDriverAnalytics = useCallback(async () => {
+    try {
+      const data = await analyticsService.getDriverAnalytics(timeRange.start, timeRange.end)
+      setDriverAnalytics(data)
+    } catch (err) {
+      console.error('Error fetching driver analytics:', err)
+      setDriverAnalytics(null)
+    }
+  }, [timeRange])
+
+  // Fetch support analytics
+  const fetchSupportAnalytics = useCallback(async () => {
+    try {
+      const data = await analyticsService.getSupportAnalytics(timeRange.start, timeRange.end)
+      setSupportAnalytics(data)
+    } catch (err) {
+      console.error('Error fetching support analytics:', err)
+      setSupportAnalytics(null)
+    }
+  }, [timeRange])
+
   useEffect(() => {
     // ✅ FIX: Fetch analytics data - errors will be handled by Redux state
     dispatch(fetchAnalytics({
@@ -97,7 +168,15 @@ const Analytics: React.FC = () => {
     }))
     // ✅ NEW: Fetch cancellation analytics
     fetchCancellationAnalytics()
-  }, [dispatch, timeRange, fetchCancellationAnalytics])
+    // Fetch revenue analytics
+    fetchRevenueAnalytics()
+    // Fetch booking analytics
+    fetchBookingAnalytics()
+    // Fetch driver analytics
+    fetchDriverAnalytics()
+    // Fetch support analytics
+    fetchSupportAnalytics()
+  }, [dispatch, timeRange, fetchCancellationAnalytics, fetchRevenueAnalytics, fetchBookingAnalytics, fetchDriverAnalytics, fetchSupportAnalytics])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -291,30 +370,87 @@ const Analytics: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Revenue Trend
               </Typography>
-              <ResponsiveContainer width="100%" height={chartHeight}>
-                <AreaChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date"
-                    tick={{ fontSize: isMobile ? 10 : 12 }}
-                    angle={isMobile ? -45 : 0}
-                    textAnchor={isMobile ? "end" : "middle"}
-                    height={isMobile ? 60 : 30}
-                  />
-                  <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
-                  <RechartsTooltip 
-                    formatter={(value) => [`₹${value}`, 'Revenue']}
-                    contentStyle={{ fontSize: isMobile ? '12px' : '14px', padding: isMobile ? '4px 8px' : '8px 12px' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#8884d8"
-                    fill="#8884d8"
-                    fillOpacity={0.6}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {revenueLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={chartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <AreaChart data={revenueTrends.length > 0 ? revenueTrends : revenueData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date"
+                      tick={{ fontSize: isMobile ? 10 : 12 }}
+                      angle={isMobile ? -45 : 0}
+                      textAnchor={isMobile ? "end" : "middle"}
+                      height={isMobile ? 60 : 30}
+                    />
+                    <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
+                    <RechartsTooltip 
+                      formatter={(value) => [`₹${Number(value).toLocaleString()}`, 'Revenue']}
+                      contentStyle={{ fontSize: isMobile ? '12px' : '14px', padding: isMobile ? '4px 8px' : '8px 12px' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#8884d8"
+                      fill="#8884d8"
+                      fillOpacity={0.6}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Real Money vs Wallet Revenue */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Revenue Breakdown
+              </Typography>
+              {revenueLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={pieChartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : realMoneyRevenue ? (
+                <Box>
+                  <Box mb={2}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Real Money Revenue
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold" color="primary">
+                      ₹{(realMoneyRevenue.realMoney || realMoneyRevenue.total || 0).toLocaleString()}
+                    </Typography>
+                  </Box>
+                  <Box mb={2}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Wallet/Virtual Revenue
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold" color="secondary">
+                      ₹{(realMoneyRevenue.wallet || realMoneyRevenue.virtual || 0).toLocaleString()}
+                    </Typography>
+                  </Box>
+                  {realMoneyRevenue.percentage && (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Real Money: {realMoneyRevenue.percentage.realMoney || 0}%
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Wallet: {realMoneyRevenue.percentage.wallet || 0}%
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              ) : (
+                <Box display="flex" justifyContent="center" alignItems="center" height={pieChartHeight}>
+                  <Typography variant="body2" color="text.secondary">
+                    No revenue data available
+                  </Typography>
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -606,6 +742,225 @@ const Analytics: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Booking Analytics Section */}
+        <Grid item xs={12}>
+          <Typography variant="h5" gutterBottom sx={{ mt: 3, mb: 2, fontWeight: 600 }}>
+            Booking Analytics
+          </Typography>
+        </Grid>
+
+        {/* Completion Rates */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Completion Rates
+              </Typography>
+              {bookingAnalyticsLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={chartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : bookingAnalytics?.completionRate ? (
+                <Box>
+                  <Typography variant="h3" fontWeight="bold" color="success.main">
+                    {(bookingAnalytics.completionRate * 100).toFixed(1)}%
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" mt={1}>
+                    {bookingAnalytics.completedBookings || 0} completed out of {bookingAnalytics.totalBookings || 0} total
+                  </Typography>
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No booking analytics data available
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Peak Booking Times */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Peak Booking Times
+              </Typography>
+              {bookingAnalyticsLoading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" height={chartHeight}>
+                  <CircularProgress />
+                </Box>
+              ) : bookingAnalytics?.peakHours ? (
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart data={bookingAnalytics.peakHours}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="hour"
+                      tick={{ fontSize: isMobile ? 10 : 12 }}
+                      angle={isMobile ? -45 : 0}
+                      textAnchor={isMobile ? "end" : "middle"}
+                      height={isMobile ? 60 : 30}
+                    />
+                    <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
+                    <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
+                    <Bar dataKey="count" fill="#8884d8" name="Bookings" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No peak time data available
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Booking Distribution by Area */}
+        {bookingAnalytics?.byArea && bookingAnalytics.byArea.length > 0 && (
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Bookings by Area
+                </Typography>
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart data={bookingAnalytics.byArea.slice(0, 10)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tick={{ fontSize: isMobile ? 10 : 12 }} />
+                    <YAxis 
+                      type="category" 
+                      dataKey="area"
+                      tick={{ fontSize: isMobile ? 10 : 12 }}
+                      width={isMobile ? 80 : 120}
+                    />
+                    <RechartsTooltip contentStyle={{ fontSize: isMobile ? '12px' : '14px' }} />
+                    <Bar dataKey="count" fill="#00C49F" name="Bookings" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Driver Analytics Section */}
+        <Grid item xs={12}>
+          <Typography variant="h5" gutterBottom sx={{ mt: 3, mb: 2, fontWeight: 600 }}>
+            Driver Analytics
+          </Typography>
+        </Grid>
+
+        {driverAnalytics && (
+          <>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Total Drivers
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold">
+                    {driverAnalytics.totalDrivers || 0}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Active Drivers
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold" color="success.main">
+                    {driverAnalytics.activeDrivers || 0}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Verified Drivers
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold" color="primary.main">
+                    {driverAnalytics.verifiedDrivers || 0}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Average Rating
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold">
+                    {driverAnalytics.averageRating ? driverAnalytics.averageRating.toFixed(2) : '0.00'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </>
+        )}
+
+        {/* Support Analytics Section */}
+        <Grid item xs={12}>
+          <Typography variant="h5" gutterBottom sx={{ mt: 3, mb: 2, fontWeight: 600 }}>
+            Support Analytics
+          </Typography>
+        </Grid>
+
+        {supportAnalytics && (
+          <>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Total Tickets
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold">
+                    {supportAnalytics.totalTickets || 0}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Resolution Time
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold" color="info.main">
+                    {supportAnalytics.averageResolutionTime ? `${supportAnalytics.averageResolutionTime}h` : 'N/A'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Resolved Tickets
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold" color="success.main">
+                    {supportAnalytics.resolvedTickets || 0}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Open Tickets
+                  </Typography>
+                  <Typography variant="h4" fontWeight="bold" color="warning.main">
+                    {supportAnalytics.openTickets || 0}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </>
+        )}
       </Grid>
     </Box>
   )

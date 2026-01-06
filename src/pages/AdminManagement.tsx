@@ -62,6 +62,7 @@ interface AdminUser {
 const AdminManagement: React.FC = () => {
   // Responsive hooks
   const isMobileDialog = useMediaQuery('(max-width: 600px)')
+  const isMobile = useMediaQuery('(max-width: 600px)')
   
   const [admins, setAdmins] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -317,90 +318,161 @@ const AdminManagement: React.FC = () => {
                 </Card>
               </Grid>
 
-              {/* Admin Table */}
+              {/* Admin Table/Cards */}
               <Grid item xs={12}>
                 <Paper>
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Admin</TableCell>
-                          <TableCell>Role</TableCell>
-                          <TableCell>Permissions</TableCell>
-                          <TableCell>Last Login</TableCell>
-                          <TableCell>Status</TableCell>
-                          <TableCell>Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
+                  {isMobile ? (
+                    // Mobile Card View
+                    <Box sx={{ p: 2 }}>
+                      <Grid container spacing={2}>
                         {admins.map((admin) => (
-                          <TableRow key={admin.uid}>
-                            <TableCell>
-                              <Box display="flex" alignItems="center">
-                                <Avatar sx={{ mr: 2 }}>
-                                  {admin.displayName.charAt(0).toUpperCase()}
-                                </Avatar>
-                                <Box>
-                                  <Typography variant="subtitle2">
-                                    {admin.displayName}
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary">
-                                    {admin.email}
-                                  </Typography>
+                          <Grid item xs={12} key={admin.uid}>
+                            <Card variant="outlined" sx={{ p: 2 }}>
+                              <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
+                                <Box display="flex" alignItems="center" gap={1.5} flex={1}>
+                                  <Avatar>
+                                    {admin.displayName.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                  <Box flex={1}>
+                                    <Typography variant="subtitle2" fontWeight="600">
+                                      {admin.displayName}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {admin.email}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                                <Box display="flex" gap={0.5}>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenDialog(admin)}
+                                    disabled={currentUser?.role !== 'super_admin'}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDeleteAdmin(admin)}
+                                    disabled={currentUser?.role !== 'super_admin' || admin.uid === currentUser?.uid}
+                                    color="error"
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
                                 </Box>
                               </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Box display="flex" alignItems="center">
-                                {getRoleIcon(admin.role)}
+                              <Box display="flex" flexWrap="wrap" gap={1} mt={1}>
+                                <Box display="flex" alignItems="center" gap={0.5}>
+                                  {getRoleIcon(admin.role)}
+                                  <Chip
+                                    label={admin.role.replace('_', ' ')}
+                                    color={getRoleColor(admin.role) as any}
+                                    size="small"
+                                  />
+                                </Box>
                                 <Chip
-                                  label={admin.role.replace('_', ' ')}
-                                  color={getRoleColor(admin.role) as any}
+                                  label={admin.isEmailVerified ? 'Verified' : 'Unverified'}
+                                  color={admin.isEmailVerified ? 'success' : 'warning'}
                                   size="small"
-                                  sx={{ ml: 1 }}
                                 />
+                                <Typography variant="caption" color="text.secondary">
+                                  {admin.permissions.length} permissions
+                                </Typography>
                               </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2">
-                                {admin.permissions.length} permissions
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2">
-                                {admin.lastLogin 
+                              <Typography variant="caption" color="text.secondary" mt={1} display="block">
+                                Last Login: {admin.lastLogin 
                                   ? new Date(admin.lastLogin).toLocaleDateString()
                                   : 'Never'
                                 }
                               </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={admin.isEmailVerified ? 'Verified' : 'Unverified'}
-                                color={admin.isEmailVerified ? 'success' : 'warning'}
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <IconButton
-                                onClick={() => handleOpenDialog(admin)}
-                                disabled={currentUser?.role !== 'super_admin'}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                              <IconButton
-                                onClick={() => handleDeleteAdmin(admin)}
-                                disabled={currentUser?.role !== 'super_admin' || admin.uid === currentUser?.uid}
-                                color="error"
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
+                            </Card>
+                          </Grid>
                         ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                      </Grid>
+                    </Box>
+                  ) : (
+                    // Desktop Table View
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Admin</TableCell>
+                            <TableCell>Role</TableCell>
+                            <TableCell>Permissions</TableCell>
+                            <TableCell>Last Login</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {admins.map((admin) => (
+                            <TableRow key={admin.uid}>
+                              <TableCell>
+                                <Box display="flex" alignItems="center">
+                                  <Avatar sx={{ mr: 2 }}>
+                                    {admin.displayName.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                  <Box>
+                                    <Typography variant="subtitle2">
+                                      {admin.displayName}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                      {admin.email}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Box display="flex" alignItems="center">
+                                  {getRoleIcon(admin.role)}
+                                  <Chip
+                                    label={admin.role.replace('_', ' ')}
+                                    color={getRoleColor(admin.role) as any}
+                                    size="small"
+                                    sx={{ ml: 1 }}
+                                  />
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {admin.permissions.length} permissions
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {admin.lastLogin 
+                                    ? new Date(admin.lastLogin).toLocaleDateString()
+                                    : 'Never'
+                                  }
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={admin.isEmailVerified ? 'Verified' : 'Unverified'}
+                                  color={admin.isEmailVerified ? 'success' : 'warning'}
+                                  size="small"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <IconButton
+                                  onClick={() => handleOpenDialog(admin)}
+                                  disabled={currentUser?.role !== 'super_admin'}
+                                >
+                                  <EditIcon />
+                                </IconButton>
+                                <IconButton
+                                  onClick={() => handleDeleteAdmin(admin)}
+                                  disabled={currentUser?.role !== 'super_admin' || admin.uid === currentUser?.uid}
+                                  color="error"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
                 </Paper>
               </Grid>
             </Grid>

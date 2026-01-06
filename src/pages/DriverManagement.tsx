@@ -48,7 +48,8 @@ import {
   SpeedDial,
   SpeedDialAction,
   SpeedDialIcon,
- 
+  Tabs,
+  Tab,
 } from '@mui/material'
 import {
   CheckCircle as CheckCircleIcon,
@@ -93,6 +94,7 @@ import { comprehensiveAdminService } from '../services/comprehensiveAdminService
 import { realTimeService } from '../services/realTimeService'
 import { apiService } from '../services/apiService'
 import { AdminColors } from '../constants/Colors'
+import DriverWalletView from '../components/DriverWalletView'
 
 interface Driver {
   id: string
@@ -189,6 +191,14 @@ interface Driver {
     total: number
     thisMonth: number
     lastMonth: number
+    commission?: number
+  }
+  wallet?: {
+    balance: number
+    totalEarned?: number
+    totalSpent?: number
+    requiresTopUp?: boolean
+    canWork?: boolean
   }
   status: string
   isVerified?: boolean
@@ -296,10 +306,12 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   const [documentsLoading, setDocumentsLoading] = useState(false)
   const [documentVerificationNotes, setDocumentVerificationNotes] = useState('')
   
-  // New states for work slots and rejection history tabs (commented out until UI implementation)
-  // const [selectedTab, setSelectedTab] = useState(0)
-  // const [workSlots, setWorkSlots] = useState<any[]>([])
-  // const [rejectionHistory, setRejectionHistory] = useState<any[]>([])
+  // Tab states for driver details dialog
+  const [selectedTab, setSelectedTab] = useState(0)
+  const [workSlots, setWorkSlots] = useState<any[]>([])
+  const [rejectionHistory, setRejectionHistory] = useState<any[]>([])
+  const [workSlotsLoading, setWorkSlotsLoading] = useState(false)
+  const [rejectionHistoryLoading, setRejectionHistoryLoading] = useState(false)
   // const [slotsLoading, setSlotsLoading] = useState(false)
   // const [historyLoading, setHistoryLoading] = useState(false)
   
@@ -354,34 +366,44 @@ const ModernDriverManagement: React.FC = React.memo(() => {
             licenseExpiry: driver?.driver?.vehicleDetails?.licenseExpiry || 'Not provided',
             
           },
-          // CRITICAL FIX: Enhanced verification status calculation
+          // ✅ CRITICAL FIX: Enhanced verification status calculation - ONLY verify if ALL documents are verified
           isVerified: (() => {
-            // Check multiple verification status indicators
-            const driverVerificationStatus = driver?.driver?.verificationStatus || driver?.verificationStatus
-            
             // Check if all required documents are verified - read from multiple possible locations
             const documents = driver?.documents || driver?.driver?.documents || {}
             const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
             let verifiedDocs = 0
             let totalDocs = 0
+            let rejectedDocs = 0
             
             requiredDocTypes.forEach(docType => {
               const doc = documents[docType as keyof Driver['documents']]
               if (doc && (doc.url || doc.downloadURL)) {
                 totalDocs++
-                if (doc.status === 'verified' || doc.verified === true) {
+                // Check multiple verification status fields
+                const isDocVerified = doc.status === 'verified' || 
+                                     doc.verified === true || 
+                                     doc.verificationStatus === 'verified' ||
+                                     doc.verificationStatus === 'approved'
+                const isDocRejected = doc.status === 'rejected' || 
+                                     doc.verificationStatus === 'rejected'
+                
+                if (isDocVerified) {
                   verifiedDocs++
+                } else if (isDocRejected) {
+                  rejectedDocs++
                 }
               }
             })
             
-            // If all required documents are verified, driver is verified
-            if (verifiedDocs === requiredDocTypes.length && totalDocs === requiredDocTypes.length) {
+            // ✅ CRITICAL: Driver is ONLY verified if ALL required documents are verified
+            // AND all documents are uploaded
+            if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
               return true
             }
             
-            // Otherwise check verification status field
-            return driverVerificationStatus === 'verified' || driver?.isVerified === true
+            // ✅ CRITICAL: If documents are uploaded but not all verified, driver is NOT verified
+            // Even if driver.verificationStatus says 'verified', we check documents first
+            return false
           })(),
           rating: Math.max(0, Math.min(5, driver?.rating || 0)), // Clamp rating between 0-5
           totalTrips: Math.max(0, driver?.totalTrips || 0), // Ensure non-negative
@@ -493,6 +515,60 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         // Initialize real-time service
         realTimeService.subscribeToDriverUpdates('admin_drivers')
         
+        // Setup wallet and revenue real-time event handlers
+        realTimeService.setEventHandlers({
+          onWalletUpdate: (data: any) => {
+            console.log('💰 [REALTIME] Wallet update received:', data)
+            // Update driver wallet balance in the list
+            if (data.driverId) {
+              setDrivers(prevDrivers => 
+                prevDrivers.map(driver => 
+                  driver.id === data.driverId || driver.uid === data.driverId || driver.driverId === data.driverId
+                    ? {
+                        ...driver,
+                        wallet: {
+                          ...driver.wallet,
+                          balance: data.balance,
+                          lastUpdated: data.lastUpdated
+                        }
+                      }
+                    : driver
+                )
+              )
+              setLastRefreshTime(new Date())
+            }
+          },
+          onRevenueUpdate: (data: any) => {
+            console.log('💰 [REALTIME] Revenue update received:', data)
+            // Refresh drivers to show updated revenue data
+            if (realTimeEnabled && !driversLoading) {
+              fetchDrivers()
+            }
+            setLastRefreshTime(new Date())
+          },
+          onTransactionUpdate: (data: any) => {
+            console.log('💰 [REALTIME] Transaction update received:', data)
+            // Update driver wallet if transaction is for a specific driver
+            if (data.driverId) {
+              setDrivers(prevDrivers => 
+                prevDrivers.map(driver => 
+                  driver.id === data.driverId || driver.uid === data.driverId || driver.driverId === data.driverId
+                    ? {
+                        ...driver,
+                        wallet: {
+                          ...driver.wallet,
+                          balance: data.transaction?.newBalance || driver.wallet?.balance,
+                          lastUpdated: new Date().toISOString()
+                        }
+                      }
+                    : driver
+                )
+              )
+              setLastRefreshTime(new Date())
+            }
+          }
+        })
+        
         setIsInitialized(true)
         setIsConnected(true)
         console.log('✅ Modern Driver Management Service initialized successfully')
@@ -565,6 +641,56 @@ const ModernDriverManagement: React.FC = React.memo(() => {
   useEffect(() => {
     setCurrentPage(1)
   }, [debouncedSearchQuery, statusFilter, verificationFilter, vehicleTypeFilter, ratingFilter])
+
+  // Fetch work slots when Work Slots tab is selected
+  useEffect(() => {
+    if (selectedTab === 1 && selectedDriver && viewDialogOpen) {
+      const driverId = selectedDriver.id || selectedDriver.uid || selectedDriver.driverId
+      if (driverId) {
+        setWorkSlotsLoading(true)
+        apiService.getDriverWorkSlots(driverId)
+          .then((response) => {
+            if (response.success && response.data) {
+              setWorkSlots(Array.isArray(response.data) ? response.data : [])
+            } else {
+              setWorkSlots([])
+            }
+          })
+          .catch((error) => {
+            console.error('Error fetching work slots:', error)
+            setWorkSlots([])
+          })
+          .finally(() => {
+            setWorkSlotsLoading(false)
+          })
+      }
+    }
+  }, [selectedTab, selectedDriver, viewDialogOpen])
+
+  // Fetch rejection history when Rejection History tab is selected
+  useEffect(() => {
+    if (selectedTab === 2 && selectedDriver && viewDialogOpen) {
+      const driverId = selectedDriver.id || selectedDriver.uid || selectedDriver.driverId
+      if (driverId) {
+        setRejectionHistoryLoading(true)
+        apiService.getDriverRejectionHistory(driverId)
+          .then((response) => {
+            if (response.success && response.data) {
+              setRejectionHistory(Array.isArray(response.data) ? response.data : [])
+            } else {
+              setRejectionHistory([])
+            }
+          })
+          .catch((error) => {
+            console.error('Error fetching rejection history:', error)
+            setRejectionHistory([])
+          })
+          .finally(() => {
+            setRejectionHistoryLoading(false)
+          })
+      }
+    }
+  }, [selectedTab, selectedDriver, viewDialogOpen])
 
   // REMOVED: handleVerifyDriver - No longer used, document verification is handled by handleVerifyDocument
 
@@ -1107,6 +1233,23 @@ const ModernDriverManagement: React.FC = React.memo(() => {
     setBanDialogOpen(true)
     handleCloseActions()
   }, [handleCloseActions])
+
+  const handleSyncDriverStatus = useCallback(async (driverId: string) => {
+    try {
+      console.log(`🔄 Syncing driver status: ${driverId}`)
+      const response = await comprehensiveAdminService.syncDriverStatus(driverId)
+      
+      if (response.success) {
+        // Refresh drivers list
+        await fetchDrivers()
+      } else {
+        setError(response.error?.message || 'Failed to sync driver status')
+      }
+    } catch (error) {
+      console.error('Error syncing driver status:', error)
+      setError('Failed to sync driver status')
+    }
+  }, [fetchDrivers])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!selectedDriver) return
@@ -2134,7 +2277,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                       <TableCell>Documents</TableCell>
                       <TableCell>Rating</TableCell>
                       <TableCell>Trips</TableCell>
-                      <TableCell>Earnings</TableCell>
+                      <TableCell>Wallet Balance</TableCell>
+                      <TableCell>Total Earnings</TableCell>
+                      <TableCell>Commission</TableCell>
+                      <TableCell>Net Earnings</TableCell>
                       <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2190,8 +2336,37 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                           </Typography>
                         </TableCell>
                         <TableCell>
+                          {(() => {
+                            const walletBalance = driver.wallet?.balance ?? 0
+                            const isSufficient = walletBalance >= 250
+                            const isLow = walletBalance > 0 && walletBalance < 250
+                            const color = isSufficient ? '#4CAF50' : isLow ? '#FF9800' : '#F44336'
+                            return (
+                              <Chip
+                                label={`₹${walletBalance.toLocaleString('en-IN')}`}
+                                size="small"
+                                sx={{
+                                  backgroundColor: color,
+                                  color: '#FFFFFF',
+                                  fontWeight: '600'
+                                }}
+                              />
+                            )
+                          })()}
+                        </TableCell>
+                        <TableCell>
                           <Typography variant="body2" fontWeight="600">
                             {formatEarnings(driver.earnings?.total || 0)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="error" fontWeight="600">
+                            {formatEarnings(driver.earnings?.commission || driver.wallet?.totalSpent || 0)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="success.main" fontWeight="600">
+                            {formatEarnings((driver.earnings?.total || 0) - (driver.earnings?.commission || driver.wallet?.totalSpent || 0))}
                           </Typography>
                         </TableCell>
                     <TableCell>
@@ -2332,6 +2507,18 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         <DialogTitle>Driver Details</DialogTitle>
         <DialogContent>
           {selectedDriver && (
+            <>
+              {/* Tabs */}
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                <Tabs value={selectedTab} onChange={(_, newValue) => setSelectedTab(newValue)}>
+                  <Tab label="Overview" />
+                  <Tab label="Work Slots" />
+                  <Tab label="Rejection History" />
+                </Tabs>
+              </Box>
+
+              {/* Overview Tab */}
+              {selectedTab === 0 && (
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" gutterBottom>Personal Information</Typography>
@@ -2457,11 +2644,131 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                   ))}
                 </Grid>
               </Grid>
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+                <DriverWalletView 
+                  driverId={selectedDriver.id || selectedDriver.uid || selectedDriver.driverId || ''}
+                  driverName={selectedDriver.personalInfo?.name || selectedDriver.name}
+                />
+              </Grid>
             </Grid>
+              )}
+
+              {/* Work Slots Tab */}
+              {selectedTab === 1 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    Work Slots
+                  </Typography>
+                  {workSlotsLoading ? (
+                    <Box display="flex" justifyContent="center" p={3}>
+                      <CircularProgress />
+                    </Box>
+                  ) : workSlots.length === 0 ? (
+                    <Alert severity="info">No work slots found for this driver.</Alert>
+                  ) : (
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Start Time</TableCell>
+                            <TableCell>End Time</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Location</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {workSlots.map((slot) => (
+                            <TableRow key={slot.id}>
+                              <TableCell>{slot.date ? new Date(slot.date).toLocaleDateString() : 'N/A'}</TableCell>
+                              <TableCell>{slot.startTime || 'N/A'}</TableCell>
+                              <TableCell>{slot.endTime || 'N/A'}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={slot.status || 'unknown'}
+                                  size="small"
+                                  color={
+                                    slot.status === 'completed'
+                                      ? 'success'
+                                      : slot.status === 'active'
+                                      ? 'primary'
+                                      : slot.status === 'cancelled'
+                                      ? 'error'
+                                      : 'default'
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell>{slot.location?.address || 'N/A'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </Box>
+              )}
+
+              {/* Rejection History Tab */}
+              {selectedTab === 2 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    Rejection History
+                  </Typography>
+                  {rejectionHistoryLoading ? (
+                    <Box display="flex" justifyContent="center" p={3}>
+                      <CircularProgress />
+                    </Box>
+                  ) : rejectionHistory.length === 0 ? (
+                    <Alert severity="info">No rejection history found for this driver.</Alert>
+                  ) : (
+                    <Box>
+                      {rejectionHistory.map((rejection) => (
+                        <Card key={rejection.id} variant="outlined" sx={{ mb: 2 }}>
+                          <CardContent>
+                            <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
+                              <Typography variant="subtitle1" fontWeight="600">
+                                {rejection.reasonCode || 'Rejection'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {rejection.rejectedAt ? new Date(rejection.rejectedAt).toLocaleString() : 'N/A'}
+                              </Typography>
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" mb={1}>
+                              {rejection.reasonText || rejection.reason || 'No reason provided'}
+                            </Typography>
+                            <Box display="flex" gap={1} alignItems="center">
+                              <Chip
+                                label={`By: ${rejection.rejectedBy === 'admin' ? 'Admin' : 'System'}`}
+                                size="small"
+                                variant="outlined"
+                              />
+                              {rejection.rejectedByName && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {rejection.rejectedByName}
+                                </Typography>
+                              )}
+                            </Box>
+                            {rejection.notes && (
+                              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                                Note: {rejection.notes}
+                              </Typography>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+          <Button onClick={() => {
+            setViewDialogOpen(false)
+            setSelectedTab(0)
+          }}>Close</Button>
         </DialogActions>
       </Dialog>
 
@@ -2555,6 +2862,24 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               </ListItemIcon>
               <ListItemText 
                 primary="Test Document Access" 
+                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
+              />
+            </MenuItem>
+            <Divider sx={{ my: 0.5 }} />
+          <MenuItem onClick={() => {
+            if (selectedDriver) {
+              const driverId = selectedDriver.id || selectedDriver.uid || selectedDriver.driverId
+              if (driverId) {
+                handleSyncDriverStatus(driverId)
+              }
+            }
+            handleCloseActions()
+          }}>
+            <ListItemIcon>
+              <RefreshIcon fontSize="small" color="primary" />
+            </ListItemIcon>
+            <ListItemText 
+              primary="Sync Status" 
                 primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
               />
             </MenuItem>

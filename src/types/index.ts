@@ -23,28 +23,51 @@ export interface AuthState {
 // Driver Types
 export interface Driver {
   id: string
-  uid: string
-  driverId: string
-  personalInfo: {
+  uid?: string
+  driverId?: string
+  name?: string // Legacy field
+  email?: string // Legacy field
+  phone?: string // Legacy field
+  personalInfo?: {
     name: string
     email: string
     phone: string
-    dateOfBirth: string
-    address: string
+    dateOfBirth?: string
+    address?: string
   }
-  vehicleInfo: {
+  vehicleInfo?: {
     make: string
     model: string
     year: number
     color: string
     plateNumber: string
   }
-  documents: {
-    drivingLicense: DocumentInfo
-    aadhaarCard: DocumentInfo
-    bikeInsurance: DocumentInfo
-    rcBook: DocumentInfo
-    profilePhoto: DocumentInfo
+  vehicle?: {
+    make: string
+    model: string
+    year: number
+    color: string
+    plateNumber: string
+  }
+  vehicleDetails?: {
+    vehicleType: 'motorcycle' | 'electric' | string
+    vehicleNumber: string
+    vehicleModel: string
+    licenseNumber: string
+    licenseExpiry: string
+  }
+  documents?: {
+    drivingLicense?: DocumentInfo
+    aadhaarCard?: DocumentInfo
+    bikeInsurance?: DocumentInfo
+    rcBook?: DocumentInfo
+    profilePhoto?: DocumentInfo
+  }
+  driver?: {
+    verificationStatus?: string
+    isVerified?: boolean
+    documents?: Driver['documents']
+    vehicleDetails?: Driver['vehicleDetails']
   }
   location?: {
     latitude: number
@@ -52,19 +75,31 @@ export interface Driver {
     address: string
     timestamp: string
   }
-  isOnline: boolean
-  isAvailable: boolean
+  isOnline?: boolean
+  isAvailable?: boolean
+  isActive?: boolean
   rating: number
-  totalDeliveries: number
-  earnings: {
+  totalDeliveries?: number
+  totalTrips?: number
+  earnings?: {
     total: number
     thisMonth: number
     lastMonth: number
+    commission?: number
   }
-  status: 'pending' | 'verified' | 'rejected' | 'suspended'
+  wallet?: {
+    balance: number
+    totalEarned?: number
+    totalSpent?: number
+    requiresTopUp?: boolean
+    canWork?: boolean
+    lastUpdated?: string
+  }
+  status: 'pending' | 'verified' | 'rejected' | 'suspended' | 'blocked' | 'active' | string
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | string
   isVerified?: boolean
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
 }
 
 export interface DocumentInfo {
@@ -103,20 +138,27 @@ export interface Customer {
 // Booking Types
 export interface Booking {
   id: string
+  bookingId?: string // Alternative ID field
   customerId: string
   driverId?: string
-  customerInfo: {
+  customerInfo?: {
     name: string
     phone: string
     email: string
   }
+  customerName?: string // Legacy field
+  customerPhone?: string // Legacy field
+  customerEmail?: string // Legacy field
   driverInfo?: {
     name: string
     phone: string
     rating: number
+    verified?: boolean
   }
+  driverName?: string // Legacy field
   driverVerified?: boolean
-  pickup: {
+  // Location structures - support both formats
+  pickup?: {
     name: string
     phone: string
     address: string
@@ -125,7 +167,17 @@ export interface Booking {
       longitude: number
     }
   }
-  dropoff: {
+  pickupLocation?: {
+    address: string
+    coordinates: {
+      lat: number
+      lng: number
+    }
+    latitude?: number
+    longitude?: number
+  }
+  pickupAddress?: string // Legacy field
+  dropoff?: {
     name: string
     phone: string
     address: string
@@ -134,7 +186,17 @@ export interface Booking {
       longitude: number
     }
   }
-  package: {
+  dropoffLocation?: {
+    address: string
+    coordinates: {
+      lat: number
+      lng: number
+    }
+    latitude?: number
+    longitude?: number
+  }
+  dropoffAddress?: string // Legacy field
+  package?: {
     type: string
     weight: number
     dimensions: {
@@ -145,10 +207,16 @@ export interface Booking {
     description: string
     value: number
   }
+  packageDetails?: {
+    weight: number
+    description: string
+    value: number
+    type?: string
+  }
   status: 'pending' | 'driver_assigned' | 'accepted' | 'driver_enroute' | 
           'driver_arrived' | 'picked_up' | 'in_transit' | 'delivered' | 
-          'completed' | 'cancelled' | 'rejected'
-  pricing: {
+          'completed' | 'cancelled' | 'rejected' | 'in_progress'
+  pricing?: {
     baseFare: number
     distanceFare: number
     timeFare: number
@@ -161,11 +229,19 @@ export interface Booking {
     base: number
     distance: number
     time: number
+    totalFare?: number
+    baseFare?: number
+    distanceFare?: number
+    currency?: string
   }
-  paymentStatus: 'pending' | 'completed' | 'failed' | 'refunded'
+  // Direct fare fields
+  totalFare?: number
+  distance?: number
+  estimatedTime?: number
+  vehicleType?: string
+  paymentStatus?: 'pending' | 'completed' | 'failed' | 'refunded' | string
   estimatedDuration?: number
   actualDuration?: number
-  distance?: number
   createdAt: string
   updatedAt: string
   scheduledAt?: string
@@ -179,9 +255,31 @@ export interface Booking {
     name: string
     phone: string
   }
+  // Cancellation details
+  cancellation?: {
+    reason: string
+    reasonText?: string
+    cancelledAt: string
+    cancelledBy: 'driver' | 'customer' | 'admin'
+    cancelledAtStage?: string
+    evidencePhotos?: Array<{
+      photoId: string
+      photoUrl: string
+      uploadedAt: string
+      description?: string
+    }>
+  }
   // Photo verifications
   pickupVerification?: VerificationDetail
   deliveryVerification?: VerificationDetail
+  // Intervention history (for admin)
+  interventionHistory?: Array<{
+    id: string
+    action: string
+    reason?: string
+    performedBy: string
+    performedAt: string
+  }>
 }
 
 export interface VerificationDetail {
@@ -239,7 +337,7 @@ export interface SupportTicket {
   ticketId: string
   userId: string
   userType: 'customer' | 'driver'
-  userInfo: {
+  userInfo?: {
     name: string
     email: string
     phone: string
@@ -250,7 +348,9 @@ export interface SupportTicket {
   priority: 'low' | 'medium' | 'high' | 'urgent'
   status: 'open' | 'in_progress' | 'resolved' | 'closed'
   assignedTo?: string
-  messages: SupportMessage[]
+  messages?: SupportMessage[]
+  resolutionNotes?: string
+  resolvedBy?: string
   createdAt: string
   updatedAt: string
   resolvedAt?: string
@@ -270,10 +370,10 @@ export interface SupportMessage {
 export interface SystemMetrics {
   status: string
   uptime: number
-  memory: any
+  memory?: any
   timestamp: string
-  services: ServiceStatus[]
-  metrics: {
+  services?: ServiceStatus[]
+  metrics?: {
     totalUsers: number
     totalDrivers: number
     totalCustomers: number
@@ -282,7 +382,7 @@ export interface SystemMetrics {
     openSupportTickets: number
     activeEmergencyAlerts: number
   }
-  systemMetrics: {
+  systemMetrics?: {
     timestamp: string
     server: {
       cpu: number
@@ -392,16 +492,92 @@ export interface SortParams {
 
 // System Health Types
 export interface SystemHealth {
-  status: 'healthy' | 'degraded' | 'unhealthy'
-  services: ServiceStatus[]
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'warning' | 'critical' | string
+  services?: {
+    api?: boolean
+    database?: boolean
+    websocket?: boolean
+    firebase?: boolean
+    [key: string]: boolean | undefined
+  }
+  servicesList?: ServiceStatus[]
   uptime: number
-  lastCheck: string
+  lastCheck?: string
+  timestamp?: string
 }
 
 export interface ServiceStatus {
   name: string
-  status: 'healthy' | 'degraded' | 'unhealthy'
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'warning' | 'critical' | string
   responseTime?: number
-  lastCheck: string
+  lastCheck?: string
   error?: string
+}
+
+// Work Slots Types
+export interface WorkSlot {
+  id: string
+  driverId: string
+  startTime: string
+  endTime: string
+  date: string
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled'
+  location?: {
+    address: string
+    latitude: number
+    longitude: number
+  }
+  shiftType?: string
+  notes?: string
+  createdAt: string
+  updatedAt?: string
+}
+
+// Rejection History Types
+export interface DriverRejectionHistory {
+  id: string
+  driverId: string
+  reason: string
+  reasonCode?: string
+  reasonText?: string
+  rejectedBy: 'admin' | 'system'
+  rejectedById?: string
+  rejectedByName?: string
+  rejectedAt: string
+  bookingId?: string
+  notes?: string
+}
+
+// Backup Types
+export interface SystemBackup {
+  id: string
+  backupId: string
+  createdAt: string
+  size: number
+  status: 'completed' | 'in_progress' | 'failed'
+  createdBy: string
+  createdByName?: string
+  description?: string
+  downloadUrl?: string
+  expiresAt?: string
+}
+
+// Intervention Types
+export interface BookingIntervention {
+  id: string
+  bookingId: string
+  action: 'reassign_driver' | 'cancel_booking' | 'update_fare' | 'send_notification'
+  reason: string
+  performedBy: string
+  performedByName?: string
+  performedAt: string
+  details?: {
+    newDriverId?: string
+    newFare?: number
+    notificationMessage?: string
+  }
+  result?: {
+    success: boolean
+    message: string
+  }
 }

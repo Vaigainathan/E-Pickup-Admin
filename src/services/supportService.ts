@@ -305,6 +305,16 @@ class SupportService {
     }
     throw new Error(response.error?.message || 'Failed to fetch ticket templates')
   }
+
+  async resolveTicket(ticketId: string, resolutionNotes: string): Promise<{ message: string; ticket: SupportTicket }> {
+    const response = await apiService.post(`/api/admin/support/tickets/${ticketId}/resolve`, {
+      resolutionNotes
+    })
+    if (response.success && response.data) {
+      return response.data as any
+    }
+    throw new Error(response.error?.message || 'Failed to resolve ticket')
+  }
 }
 
 export const supportService = new SupportService()

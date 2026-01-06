@@ -234,6 +234,40 @@ class CustomerService {
     }
   }
 
+  // Update customer name
+  async updateCustomerName(customerId: string, name: string): Promise<CustomerServiceResponse<Customer>> {
+    try {
+      console.log(`✏️ Updating customer name: ${customerId} to ${name}`)
+      const response = await apiService.put(`/api/admin/customers/${customerId}/name`, { name })
+      
+      if (response.success) {
+        console.log('✅ Customer name updated successfully')
+        return {
+          success: true,
+          data: response.data as Customer,
+          message: 'Customer name updated successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'UPDATE_CUSTOMER_NAME_ERROR',
+          message: response.error?.message || 'Failed to update customer name'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error updating customer name:', error)
+      return {
+        success: false,
+        error: {
+          code: 'UPDATE_CUSTOMER_NAME_ERROR',
+          message: 'Failed to update customer name'
+        }
+      }
+    }
+  }
+
   // Wallet methods removed - no wallet system for customers
 }
 

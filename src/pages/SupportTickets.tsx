@@ -45,10 +45,12 @@ import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
 import { fetchSupportTickets, updateTicketStatus, sendMessage, setPagination } from '../store/slices/supportSlice' // Removed unused setFilters
 import { SupportTicket } from '../types'
+import { supportService } from '../services/supportService'
 
 const SupportTickets: React.FC = () => {
   // Responsive hooks
   const isMobileDialog = useMediaQuery('(max-width: 600px)')
+  const isMobile = useMediaQuery('(max-width: 600px)')
   
   const dispatch = useAppDispatch()
   const { tickets, loading, pagination, filters, stats } = useSelector((state: RootState) => state.support)
@@ -58,7 +60,10 @@ const SupportTickets: React.FC = () => {
   const [replyDialogOpen, setReplyDialogOpen] = useState(false)
   const [replyMessage, setReplyMessage] = useState('')
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+  const [resolutionNotes, setResolutionNotes] = useState('')
   const [newStatus, setNewStatus] = useState('')
+  const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
     // Guard against infinite loops by checking if data is already loading
@@ -94,6 +99,25 @@ const SupportTickets: React.FC = () => {
         setNewStatus('')
       } catch (error) {
         console.error('Error updating ticket status:', error)
+      }
+    }
+  }
+
+  const handleResolveTicket = async () => {
+    if (selectedTicket && resolutionNotes.trim()) {
+      setResolving(true)
+      try {
+        await supportService.resolveTicket(selectedTicket.id, resolutionNotes)
+        setResolveDialogOpen(false)
+        setResolutionNotes('')
+        setSelectedTicket(null)
+        // Refresh tickets list
+        dispatch(fetchSupportTickets({ pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit }, filters }))
+      } catch (error: any) {
+        console.error('Error resolving ticket:', error)
+        alert(error.message || 'Failed to resolve ticket')
+      } finally {
+        setResolving(false)
       }
     }
   }
@@ -270,71 +294,47 @@ const SupportTickets: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             All Support Tickets ({tickets.length})
           </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Ticket ID</TableCell>
-                  <TableCell>User</TableCell>
-                  <TableCell>Subject</TableCell>
-                  <TableCell>Category</TableCell>
-                  <TableCell>Priority</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Created</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {tickets?.map((ticket) => (
-                  <TableRow key={ticket.id}>
-                    <TableCell>
-                      <Typography variant="subtitle2" fontWeight="bold">
-                        #{ticket.ticketId}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="subtitle2" fontWeight="bold">
-                          {ticket.userInfo?.name || 'Unknown User'}
+          {isMobile ? (
+            // Mobile Card View
+            <Grid container spacing={2}>
+              {tickets?.map((ticket) => (
+                <Grid item xs={12} key={ticket.id}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
+                      <Box flex={1}>
+                        <Typography variant="subtitle2" fontWeight="600">
+                          #{ticket.ticketId}
                         </Typography>
-                        <Typography variant="body2" color="textSecondary">
-                          {ticket.userInfo?.email || 'No email'}
+                        <Typography variant="body2" color="text.secondary" mb={1}>
+                          {ticket.userInfo?.name || 'Unknown User'} • {ticket.userInfo?.email || 'No email'}
+                        </Typography>
+                        <Typography variant="body1" fontWeight="500" mb={1}>
+                          {ticket.subject}
                         </Typography>
                       </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {ticket.subject}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
+                    </Box>
+                    <Box display="flex" flexWrap="wrap" gap={1} mb={1}>
                       <Chip
                         label={ticket.category}
                         color={getCategoryColor(ticket.category) as any}
                         size="small"
                       />
-                    </TableCell>
-                    <TableCell>
                       <Chip
                         label={ticket.priority}
                         color={getPriorityColor(ticket.priority) as any}
                         size="small"
                       />
-                    </TableCell>
-                    <TableCell>
                       <Chip
                         label={ticket.status}
                         color={getStatusColor(ticket.status) as any}
                         size="small"
                       />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+                      <Typography variant="caption" color="text.secondary">
                         {formatTime(ticket.createdAt)}
                       </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title="View Details">
+                      <Box display="flex" gap={1}>
                         <IconButton
                           size="small"
                           onClick={() => {
@@ -342,10 +342,8 @@ const SupportTickets: React.FC = () => {
                             setViewDialogOpen(true)
                           }}
                         >
-                          <VisibilityIcon />
+                          <VisibilityIcon fontSize="small" />
                         </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Reply">
                         <IconButton
                           size="small"
                           onClick={() => {
@@ -353,27 +351,121 @@ const SupportTickets: React.FC = () => {
                             setReplyDialogOpen(true)
                           }}
                         >
-                          <ReplyIcon />
+                          <ReplyIcon fontSize="small" />
                         </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Update Status">
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setSelectedTicket(ticket)
-                            setNewStatus(ticket.status)
-                            setStatusDialogOpen(true)
-                          }}
-                        >
-                          <CheckCircleIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
+                      </Box>
+                    </Box>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            // Desktop Table View
+            <TableContainer component={Paper} variant="outlined">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Ticket ID</TableCell>
+                    <TableCell>User</TableCell>
+                    <TableCell>Subject</TableCell>
+                    <TableCell>Category</TableCell>
+                    <TableCell>Priority</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Created</TableCell>
+                    <TableCell>Actions</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {tickets?.map((ticket) => (
+                    <TableRow key={ticket.id}>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          #{ticket.ticketId}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="subtitle2" fontWeight="bold">
+                            {ticket.userInfo?.name || 'Unknown User'}
+                          </Typography>
+                          <Typography variant="body2" color="textSecondary">
+                            {ticket.userInfo?.email || 'No email'}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {ticket.subject}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={ticket.category}
+                          color={getCategoryColor(ticket.category) as any}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={ticket.priority}
+                          color={getPriorityColor(ticket.priority) as any}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={ticket.status}
+                          color={getStatusColor(ticket.status) as any}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {formatTime(ticket.createdAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title="View Details">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedTicket(ticket)
+                              setViewDialogOpen(true)
+                            }}
+                          >
+                            <VisibilityIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Reply">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedTicket(ticket)
+                              setReplyDialogOpen(true)
+                            }}
+                          >
+                            <ReplyIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Update Status">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedTicket(ticket)
+                              setNewStatus(ticket.status)
+                              setStatusDialogOpen(true)
+                            }}
+                          >
+                            <CheckCircleIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
           
           <Box display="flex" justifyContent="center" mt={3}>
             <Pagination
@@ -494,6 +586,61 @@ const SupportTickets: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+          {selectedTicket && selectedTicket.status !== 'resolved' && selectedTicket.status !== 'closed' && (
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<CheckCircleIcon />}
+              onClick={() => {
+                setResolveDialogOpen(true)
+              }}
+            >
+              Resolve Ticket
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Resolve Ticket Dialog */}
+      <Dialog open={resolveDialogOpen} onClose={() => setResolveDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
+        <DialogTitle>Resolve Support Ticket</DialogTitle>
+        <DialogContent>
+          {selectedTicket && (
+            <Box>
+              <Typography variant="body1" mb={2}>
+                Ticket: #{selectedTicket.ticketId} - {selectedTicket.subject}
+              </Typography>
+              <TextField
+                fullWidth
+                label="Resolution Notes"
+                multiline
+                rows={6}
+                value={resolutionNotes}
+                onChange={(e) => setResolutionNotes(e.target.value)}
+                margin="normal"
+                required
+                placeholder="Enter resolution notes explaining how this ticket was resolved..."
+                helperText="These notes will be saved with the ticket for future reference"
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setResolveDialogOpen(false)
+            setResolutionNotes('')
+          }} disabled={resolving}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleResolveTicket}
+            variant="contained"
+            color="success"
+            disabled={!resolutionNotes.trim() || resolving}
+            startIcon={resolving ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+          >
+            {resolving ? 'Resolving...' : 'Resolve Ticket'}
+          </Button>
         </DialogActions>
       </Dialog>
 

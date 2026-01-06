@@ -202,6 +202,9 @@ const supportSlice = createSlice({
       // Send Message
       .addCase(sendMessage.fulfilled, (state, action) => {
         if (state.selectedTicket?.id === action.payload.ticketId) {
+          if (!state.selectedTicket.messages) {
+            state.selectedTicket.messages = []
+          }
           state.selectedTicket.messages.push(action.payload.message)
         }
       })

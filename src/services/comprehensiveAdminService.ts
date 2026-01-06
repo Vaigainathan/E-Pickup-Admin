@@ -9,7 +9,7 @@ import {
   where, 
   orderBy, 
   limit, 
-  doc, 
+  doc as firestoreDoc, 
   getDoc, 
   updateDoc, 
   onSnapshot, 
@@ -510,6 +510,20 @@ class ComprehensiveAdminService {
           }
         }
         
+        // Fetch wallet balance
+        let walletBalance = 0
+        try {
+          const driverDocId = doc.id // Store driver document ID before it gets shadowed
+          const walletDocRef = firestoreDoc(db, 'driverPointsWallets', driverDocId)
+          const walletDoc = await getDoc(walletDocRef)
+          if (walletDoc.exists()) {
+            const walletData = walletDoc.data() as { pointsBalance?: number }
+            walletBalance = walletData.pointsBalance || 0
+          }
+        } catch (walletError) {
+          console.warn(`⚠️ Could not fetch wallet for driver ${doc.id}:`, walletError)
+        }
+
         drivers.push({
           id: doc.id,
           uid: data.uid || doc.id,
@@ -544,41 +558,86 @@ class ComprehensiveAdminService {
             thisMonth: 0,
             lastMonth: 0
           },
-          // ✅ FIX: Check multiple status fields and document verification
+          wallet: {
+            balance: walletBalance,
+            lastUpdated: new Date().toISOString()
+          },
+          // ✅ CRITICAL FIX: Check document verification status FIRST - driver is ONLY verified if ALL documents are verified
           status: (() => {
-            // Priority 1: Check driver.verificationStatus
-            if (data.driver?.verificationStatus === 'approved' || data.driver?.verificationStatus === 'verified') {
+            const driverDocs = data.driver?.documents || {}
+            const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
+            let verifiedDocs = 0
+            let totalDocs = 0
+            let rejectedDocs = 0
+            
+            // Check each required document
+            requiredDocTypes.forEach(docType => {
+              const doc = driverDocs[docType]
+              if (doc && (doc.url || doc.downloadURL)) {
+                totalDocs++
+                // Check multiple verification status fields
+                const isDocVerified = doc.status === 'verified' || 
+                                     doc.verified === true || 
+                                     doc.verificationStatus === 'verified' ||
+                                     doc.verificationStatus === 'approved'
+                const isDocRejected = doc.status === 'rejected' || 
+                                     doc.verificationStatus === 'rejected'
+                
+                if (isDocVerified) {
+                  verifiedDocs++
+                } else if (isDocRejected) {
+                  rejectedDocs++
+                }
+              }
+            })
+            
+            // ✅ CRITICAL: Driver is ONLY verified if ALL required documents are verified
+            if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
               return 'verified'
             }
+            
+            // If any document is rejected, driver is rejected
+            if (rejectedDocs > 0) {
+              return 'rejected'
+            }
+            
+            // If documents are uploaded but not all verified, status is pending_verification
+            if (totalDocs > 0 && verifiedDocs < requiredDocTypes.length) {
+              return 'pending_verification'
+            }
+            
+            // Fallback to driver.verificationStatus if no documents found
             if (data.driver?.verificationStatus === 'rejected') {
               return 'rejected'
             }
             
-            // Priority 2: Check isVerified flag
-            if (data.driver?.isVerified === true || data.isVerified === true) {
-              return 'verified'
-            }
-            
-            // Priority 3: Check if all documents are verified
-            const driverDocs = data.driver?.documents || {}
-            const docKeys = Object.keys(driverDocs)
-            if (docKeys.length > 0) {
-              const allVerified = docKeys.every(key => {
-                const doc = driverDocs[key]
-                return doc && (doc.verified === true || doc.status === 'verified' || doc.verificationStatus === 'verified')
-              })
-              if (allVerified) {
-                return 'verified'
-              }
-            }
-            
+            // Default to pending if no documents uploaded
             return 'pending'
           })(),
-          isVerified: data.driver?.verificationStatus === 'approved' || 
-                     data.driver?.verificationStatus === 'verified' || 
-                     data.driver?.isVerified === true ||
-                     data.isVerified === true ||
-                     false,
+          // ✅ CRITICAL: isVerified is ONLY true if ALL documents are verified
+          isVerified: (() => {
+            const driverDocs = data.driver?.documents || {}
+            const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
+            let verifiedDocs = 0
+            let totalDocs = 0
+            
+            requiredDocTypes.forEach(docType => {
+              const doc = driverDocs[docType]
+              if (doc && (doc.url || doc.downloadURL)) {
+                totalDocs++
+                const isDocVerified = doc.status === 'verified' || 
+                                     doc.verified === true || 
+                                     doc.verificationStatus === 'verified' ||
+                                     doc.verificationStatus === 'approved'
+                if (isDocVerified) {
+                  verifiedDocs++
+                }
+              }
+            })
+            
+            // ONLY return true if ALL required documents are verified
+            return totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length
+          })(),
           createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
         } as Driver)
@@ -668,7 +727,7 @@ class ComprehensiveAdminService {
       if (driverIdsToFetch.size > 0) {
         const driverFetchPromises = Array.from(driverIdsToFetch).map(async (driverId) => {
           try {
-            const driverDocRef = doc(db, 'users', driverId)
+            const driverDocRef = firestoreDoc(db, 'users', driverId)
             const driverDocSnapshot = await getDoc(driverDocRef)
             if (driverDocSnapshot.exists()) {
               const driverData = driverDocSnapshot.data()
@@ -1198,7 +1257,13 @@ class ComprehensiveAdminService {
         // Transform backend data to frontend format
         const systemHealth: SystemHealth = {
           status: healthData.status || 'healthy',
-          services: healthData.services || [
+          services: healthData.services || {
+            api: true,
+            database: true,
+            websocket: true,
+            firebase: true
+          },
+          servicesList: healthData.servicesList || [
             { name: 'API', status: 'healthy', lastCheck: new Date().toISOString() },
             { name: 'Database', status: 'healthy', lastCheck: new Date().toISOString() },
             { name: 'WebSocket', status: 'healthy', lastCheck: new Date().toISOString() },
@@ -1221,7 +1286,13 @@ class ComprehensiveAdminService {
         success: true,
         data: {
           status: 'healthy',
-          services: [
+          services: {
+            api: true,
+            database: true,
+            websocket: true,
+            firebase: true
+          },
+          servicesList: [
             { name: 'API', status: 'healthy', lastCheck: new Date().toISOString() },
             { name: 'Database', status: 'healthy', lastCheck: new Date().toISOString() },
             { name: 'WebSocket', status: 'healthy', lastCheck: new Date().toISOString() },
@@ -1277,6 +1348,320 @@ class ComprehensiveAdminService {
         error: {
           code: 'FETCH_REVENUE_ERROR',
           message: 'Failed to fetch revenue summary'
+        }
+      }
+    }
+  }
+
+  async getTotalRevenue(filters?: {
+    startDate?: string
+    endDate?: string
+    driverId?: string
+    paymentMethod?: string
+  }): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching total revenue from backend...')
+      const queryParams = new URLSearchParams()
+      if (filters?.startDate) queryParams.append('startDate', filters.startDate)
+      if (filters?.endDate) queryParams.append('endDate', filters.endDate)
+      if (filters?.driverId) queryParams.append('driverId', filters.driverId)
+      if (filters?.paymentMethod) queryParams.append('paymentMethod', filters.paymentMethod)
+
+      const response = await apiService.get(`/api/admin/revenue/total?${queryParams.toString()}`)
+      
+      if (response.success && response.data) {
+        console.log('✅ Total revenue fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Total revenue fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_TOTAL_REVENUE_ERROR',
+          message: response.error?.message || 'Failed to fetch total revenue'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching total revenue:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_TOTAL_REVENUE_ERROR',
+          message: 'Failed to fetch total revenue'
+        }
+      }
+    }
+  }
+
+  async getRevenueTrends(
+    startDate?: string,
+    endDate?: string
+  ): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching revenue trends from backend...')
+      const queryParams = new URLSearchParams()
+      if (startDate) queryParams.append('startDate', startDate)
+      if (endDate) queryParams.append('endDate', endDate)
+
+      const response = await apiService.get(`/api/admin/revenue/trends?${queryParams.toString()}`)
+      
+      if (response.success && response.data) {
+        console.log('✅ Revenue trends fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Revenue trends fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_TRENDS_ERROR',
+          message: response.error?.message || 'Failed to fetch revenue trends'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching revenue trends:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_TRENDS_ERROR',
+          message: 'Failed to fetch revenue trends'
+        }
+      }
+    }
+  }
+
+  async getRealMoneyRevenue(
+    startDate?: string,
+    endDate?: string
+  ): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching real money revenue from backend...')
+      const queryParams = new URLSearchParams()
+      if (startDate) queryParams.append('startDate', startDate)
+      if (endDate) queryParams.append('endDate', endDate)
+
+      const response = await apiService.get(`/api/admin/revenue/real-money?${queryParams.toString()}`)
+      
+      if (response.success && response.data) {
+        console.log('✅ Real money revenue fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Real money revenue fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REAL_MONEY_REVENUE_ERROR',
+          message: response.error?.message || 'Failed to fetch real money revenue'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching real money revenue:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REAL_MONEY_REVENUE_ERROR',
+          message: 'Failed to fetch real money revenue'
+        }
+      }
+    }
+  }
+
+  async getRevenueByPeriod(
+    startDate: string,
+    endDate: string,
+    period: 'daily' | 'weekly' | 'monthly' = 'daily'
+  ): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching revenue by period from backend...')
+      const queryParams = new URLSearchParams()
+      queryParams.append('startDate', startDate)
+      queryParams.append('endDate', endDate)
+      queryParams.append('period', period)
+
+      const response = await apiService.get(`/api/admin/revenue/period?${queryParams.toString()}`)
+      
+      if (response.success && response.data) {
+        console.log('✅ Revenue by period fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Revenue by period fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_BY_PERIOD_ERROR',
+          message: response.error?.message || 'Failed to fetch revenue by period'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching revenue by period:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_BY_PERIOD_ERROR',
+          message: 'Failed to fetch revenue by period'
+        }
+      }
+    }
+  }
+
+  async getRevenueByDriver(driverId?: string): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching revenue by driver from backend...')
+      const url = driverId 
+        ? `/api/admin/revenue/driver/${driverId}`
+        : '/api/admin/revenue/driver'
+      
+      const response = await apiService.get(url)
+      
+      if (response.success && response.data) {
+        console.log('✅ Revenue by driver fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Revenue by driver fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_BY_DRIVER_ERROR',
+          message: response.error?.message || 'Failed to fetch revenue by driver'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching revenue by driver:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_BY_DRIVER_ERROR',
+          message: 'Failed to fetch revenue by driver'
+        }
+      }
+    }
+  }
+
+  async getDriverEarnings(
+    driverId: string,
+    filters?: {
+      startDate?: string
+      endDate?: string
+      period?: 'all' | 'daily' | 'weekly' | 'monthly'
+    }
+  ): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching driver earnings from backend...')
+      const queryParams = new URLSearchParams()
+      if (filters?.startDate) queryParams.append('startDate', filters.startDate)
+      if (filters?.endDate) queryParams.append('endDate', filters.endDate)
+      if (filters?.period) queryParams.append('period', filters.period)
+
+      const response = await apiService.get(`/api/admin/drivers/${driverId}/earnings?${queryParams.toString()}`)
+      
+      if (response.success && response.data) {
+        console.log('✅ Driver earnings fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Driver earnings fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_DRIVER_EARNINGS_ERROR',
+          message: response.error?.message || 'Failed to fetch driver earnings'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching driver earnings:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_DRIVER_EARNINGS_ERROR',
+          message: 'Failed to fetch driver earnings'
+        }
+      }
+    }
+  }
+
+  async getDriverWallet(driverId: string): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching driver wallet from backend...')
+      const response = await apiService.get(`/api/admin/drivers/${driverId}/wallet`)
+      
+      if (response.success && response.data) {
+        console.log('✅ Driver wallet fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Driver wallet fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_DRIVER_WALLET_ERROR',
+          message: response.error?.message || 'Failed to fetch driver wallet'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching driver wallet:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_DRIVER_WALLET_ERROR',
+          message: 'Failed to fetch driver wallet'
+        }
+      }
+    }
+  }
+
+  async getRevenueStats(): Promise<AdminServiceResponse<any>> {
+    try {
+      console.log('💰 Fetching revenue statistics from backend...')
+      const response = await apiService.get('/api/admin/revenue/stats')
+      
+      if (response.success && response.data) {
+        console.log('✅ Revenue statistics fetched successfully')
+        return {
+          success: true,
+          data: response.data,
+          message: 'Revenue statistics fetched successfully'
+        }
+      }
+      
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_STATS_ERROR',
+          message: response.error?.message || 'Failed to fetch revenue statistics'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching revenue statistics:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_REVENUE_STATS_ERROR',
+          message: 'Failed to fetch revenue statistics'
         }
       }
     }
@@ -1339,7 +1724,7 @@ class ComprehensiveAdminService {
         const requestData = docSnapshot.data()
         
         // Get driver details
-        const driverDocRef = doc(db, 'users', requestData.driverId)
+        const driverDocRef = firestoreDoc(db, 'users', requestData.driverId)
         const driverDocSnapshot = await getDoc(driverDocRef)
         const driverDoc = driverDocSnapshot.exists() ? driverDocSnapshot.data() : null
         if (driverDoc) {
@@ -1527,7 +1912,7 @@ class ComprehensiveAdminService {
       
       // Fallback: Get from user collection
       console.log('📋 No verification request found, checking user collection...')
-      const userDocRef = doc(db, 'users', driverId)
+      const userDocRef = firestoreDoc(db, 'users', driverId)
       const userDocSnapshot = await getDoc(userDocRef)
       const userDoc = userDocSnapshot.exists() ? userDocSnapshot.data() : null
       
@@ -1768,7 +2153,7 @@ class ComprehensiveAdminService {
       // Fallback to Firestore debug
       
       // Get driver info
-      const driverDocRef = doc(db, 'users', driverId)
+      const driverDocRef = firestoreDoc(db, 'users', driverId)
       const driverDocSnapshot = await getDoc(driverDocRef)
       const driverDoc = driverDocSnapshot.exists() ? driverDocSnapshot.data() : null
       
@@ -1830,7 +2215,7 @@ class ComprehensiveAdminService {
       console.log(`📄 Fetching documents for driver: ${driverId}`)
       
       // ✅ CRITICAL FIX: Get driver document from correct collection (users, not drivers)
-      const driverDoc = await getDoc(doc(db, 'users', driverId))
+      const driverDoc = await getDoc(firestoreDoc(db, 'users', driverId))
       if (!driverDoc.exists()) {
         return {
           success: false,
@@ -1995,7 +2380,7 @@ class ComprehensiveAdminService {
         console.error('❌ Backend API failed, falling back to Firestore')
         
         // Fallback to Firestore update
-        const driverRef = doc(db, 'users', driverId)
+        const driverRef = firestoreDoc(db, 'users', driverId)
         const driverDoc = await getDoc(driverRef)
         
         if (!driverDoc.exists()) {
@@ -2112,7 +2497,7 @@ class ComprehensiveAdminService {
         console.error('❌ Backend API failed, falling back to Firestore')
         
         // Fallback to Firestore update
-        const driverRef = doc(db, 'users', driverId)
+        const driverRef = firestoreDoc(db, 'users', driverId)
         
         await updateDoc(driverRef, {
           'driver.verificationStatus': 'verified',
@@ -2163,7 +2548,7 @@ class ComprehensiveAdminService {
         console.error('❌ Backend API failed, falling back to Firestore')
         
         // Fallback to Firestore update
-        const driverRef = doc(db, 'users', driverId)
+        const driverRef = firestoreDoc(db, 'users', driverId)
         
         await updateDoc(driverRef, {
           'driver.verificationStatus': 'rejected',
@@ -2257,7 +2642,7 @@ class ComprehensiveAdminService {
       // Fallback to Firestore
       
       // Get driver data from Firestore (users collection)
-      const driverDocRef = doc(db, 'users', driverId)
+      const driverDocRef = firestoreDoc(db, 'users', driverId)
       const driverDocSnapshot = await getDoc(driverDocRef)
       if (!driverDocSnapshot.exists()) {
         return {
@@ -2269,7 +2654,7 @@ class ComprehensiveAdminService {
         }
       }
       
-      const driverData = driverDocSnapshot.data()
+      const driverData = driverDocSnapshot.data() as any
       const allDocuments: any = {}
       const folderStructure: any = {}
       
@@ -2468,7 +2853,7 @@ class ComprehensiveAdminService {
     try {
       console.log(`🚨 Responding to emergency alert: ${alertId}`)
       
-      const alertRef = doc(db, 'emergencyAlerts', alertId)
+      const alertRef = firestoreDoc(db, 'emergencyAlerts', alertId)
       await updateDoc(alertRef, {
         status: 'responded',
         response: response,
@@ -2497,7 +2882,7 @@ class ComprehensiveAdminService {
     try {
       console.log(`🚨 Updating emergency status: ${alertId} to ${status}`)
       
-      const alertRef = doc(db, 'emergencyAlerts', alertId)
+      const alertRef = firestoreDoc(db, 'emergencyAlerts', alertId)
       const updateData: any = {
         status: status,
         updatedAt: new Date()

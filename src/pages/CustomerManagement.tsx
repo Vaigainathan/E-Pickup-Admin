@@ -78,6 +78,7 @@ const CustomerManagement: React.FC = () => {
   
   // Responsive hooks
   const isMobileDialog = useMediaQuery('(max-width: 600px)')
+  const isMobile = useMediaQuery('(max-width: 600px)')
 
   // State management
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -423,42 +424,118 @@ const CustomerManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Customers Table */}
+      {/* Customers Table/Cards */}
       <Card>
         <CardContent>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Customer</TableCell>
-                  <TableCell>Contact</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Registration</TableCell>
-                  <TableCell>Bookings</TableCell>
-                  {/* Wallet column removed - no wallet system for customers */}
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedCustomers.map((customer) => (
-                  <TableRow key={customer.id} hover>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {isMobile ? (
+            // Mobile Card View
+            <Grid container spacing={2}>
+              {paginatedCustomers.map((customer) => (
+                <Grid item xs={12} key={customer.id}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
+                      <Box display="flex" alignItems="center" gap={1.5} flex={1}>
                         <Avatar>
                           <PersonIcon />
                         </Avatar>
-                        <Box>
-                          <Typography variant="subtitle2">
+                        <Box flex={1}>
+                          <Typography variant="subtitle2" fontWeight="600">
                             {customer.name || customer.personalInfo?.name || 'Unknown'}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            ID: {customer.id}
+                          <Typography variant="caption" color="text.secondary">
+                            ID: {customer.id.substring(0, 8)}...
                           </Typography>
                         </Box>
                       </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          setActionMenuAnchor(e.currentTarget)
+                          setActionMenuCustomer(customer)
+                        }}
+                      >
+                        <MoreHorizIcon />
+                      </IconButton>
+                    </Box>
+                    <Box display="flex" flexDirection="column" gap={1} mt={1}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <PhoneIcon fontSize="small" color="action" />
+                        <Typography variant="body2">
+                          {customer.phone || customer.personalInfo?.phone || 'N/A'}
+                        </Typography>
+                      </Box>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <EmailIcon fontSize="small" color="action" />
+                        <Typography variant="body2" noWrap sx={{ maxWidth: '100%' }}>
+                          {customer.email || customer.personalInfo?.email || 'N/A'}
+                        </Typography>
+                      </Box>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mt={1}>
+                        <Chip
+                          label={customer.accountStatus || 'active'}
+                          size="small"
+                          color={
+                            customer.accountStatus === 'active'
+                              ? 'success'
+                              : customer.accountStatus === 'suspended'
+                              ? 'warning'
+                              : 'error'
+                          }
+                        />
+                        <Typography variant="body2" color="text.secondary">
+                          {customer.bookingsCount || 0} bookings
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<VisibilityIcon />}
+                        onClick={() => navigate(`/customers/${customer.id}`)}
+                        fullWidth
+                        sx={{ mt: 1 }}
+                      >
+                        View Details
+                      </Button>
+                    </Box>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            // Desktop Table View
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Customer</TableCell>
+                    <TableCell>Contact</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Registration</TableCell>
+                    <TableCell>Bookings</TableCell>
+                    {/* Wallet column removed - no wallet system for customers */}
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedCustomers.map((customer) => (
+                    <TableRow key={customer.id} hover>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Avatar>
+                            <PersonIcon />
+                          </Avatar>
+                          <Box>
+                            <Typography variant="subtitle2">
+                              {customer.name || customer.personalInfo?.name || 'Unknown'}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              ID: {customer.id}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box>
                         <Typography variant="body2">
                           <EmailIcon sx={{ fontSize: 16, mr: 1, verticalAlign: 'middle' }} />
                           {customer.email || customer.personalInfo?.email || 'N/A'}
@@ -503,6 +580,7 @@ const CustomerManagement: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          )}
 
           {/* Pagination */}
           {filteredCustomers.length > rowsPerPage && (

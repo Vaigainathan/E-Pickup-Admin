@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Box,
   Typography,
@@ -27,6 +27,12 @@ import {
   Breadcrumbs,
   Link,
   useMediaQuery,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Paper,
+  IconButton,
 } from '@mui/material'
 import {
   Person as PersonIcon,
@@ -43,9 +49,13 @@ import {
   Train as TrainIcon,
   Flight as FlightIcon,
   DirectionsWalk as WalkIcon,
+  Edit as EditIcon,
+  OpenInNew as OpenInNewIcon,
+  FilterList as FilterListIcon,
 } from '@mui/icons-material'
 import { customerService } from '../services/customerService'
 import { useParams, useNavigate } from 'react-router-dom'
+import { Booking } from '../types'
 
 interface Customer {
   id: string
@@ -66,27 +76,6 @@ interface Customer {
   // No wallet system for customers
 }
 
-interface Booking {
-  id: string
-  customerId: string
-  driverId?: string
-  pickupLocation: {
-    address: string
-    coordinates: { lat: number; lng: number }
-  }
-  dropoffLocation: {
-    address: string
-    coordinates: { lat: number; lng: number }
-  }
-  status: string
-  fare: number
-  createdAt: Date
-  updatedAt: Date
-  vehicleType?: string
-  driverName?: string
-  customerName?: string
-}
-
 const CustomerDetail: React.FC = () => {
   // Responsive hooks
   const isMobileDialog = useMediaQuery('(max-width: 600px)')
@@ -97,7 +86,14 @@ const CustomerDetail: React.FC = () => {
   // State management
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [filteredBookings, setFilteredBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
+  const [editNameDialogOpen, setEditNameDialogOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [updatingName, setUpdatingName] = useState(false)
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('all')
+  const [bookingDateFrom, setBookingDateFrom] = useState<string>('')
+  const [bookingDateTo, setBookingDateTo] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [selectedTab, setSelectedTab] = useState(0)
 
@@ -132,19 +128,74 @@ const CustomerDetail: React.FC = () => {
   }
 
   // Load customer bookings
-  const loadBookings = async () => {
+  const loadBookings = async (status?: string) => {
     if (!id) return
 
     try {
-      const response = await customerService.getCustomerBookings(id)
+      const response = await customerService.getCustomerBookings(id, status)
       
       if (response.success && response.data) {
         setBookings(response.data)
+        applyBookingFilters(response.data)
       }
     } catch (err) {
       console.error('Error loading bookings:', err)
     }
   }
+
+  const applyBookingFilters = (bookingsList: Booking[]) => {
+    let filtered = [...bookingsList]
+
+    // Filter by status
+    if (bookingStatusFilter !== 'all') {
+      filtered = filtered.filter(b => b.status === bookingStatusFilter)
+    }
+
+    // Filter by date range
+    if (bookingDateFrom) {
+      const fromDate = new Date(bookingDateFrom)
+      filtered = filtered.filter(b => new Date(b.createdAt) >= fromDate)
+    }
+    if (bookingDateTo) {
+      const toDate = new Date(bookingDateTo)
+      toDate.setHours(23, 59, 59, 999) // Include entire end date
+      filtered = filtered.filter(b => new Date(b.createdAt) <= toDate)
+    }
+
+    setFilteredBookings(filtered)
+  }
+
+  useEffect(() => {
+    if (bookings.length > 0) {
+      applyBookingFilters(bookings)
+    }
+  }, [bookingStatusFilter, bookingDateFrom, bookingDateTo, bookings])
+
+  // Calculate summary metrics
+  const bookingSummary = useMemo(() => {
+    const total = bookings.length
+    const completed = bookings.filter(b => b.status === 'completed' || b.status === 'delivered').length
+    const cancelled = bookings.filter(b => b.status === 'cancelled').length
+    // Handle multiple fare formats: pricing.totalFare, fare.totalFare, fare.total, totalFare, or fare as number
+    const totalFare = bookings.reduce((sum, b) => {
+      const fareValue = 
+        b.pricing?.totalFare || 
+        (typeof b.fare === 'object' ? (b.fare.totalFare || b.fare.total) : null) ||
+        b.totalFare ||
+        (typeof b.fare === 'number' ? b.fare : 0) ||
+        0
+      return sum + fareValue
+    }, 0)
+    const averageFare = total > 0 ? totalFare / total : 0
+
+    return {
+      total,
+      completed,
+      cancelled,
+      averageFare,
+      totalFare
+    }
+  }, [bookings])
 
   // Handle customer actions
   const handleDeleteCustomer = async () => {
@@ -254,6 +305,12 @@ const CustomerDetail: React.FC = () => {
     loadCustomer()
     loadBookings()
   }, [id])
+
+  useEffect(() => {
+    if (editNameDialogOpen && customer) {
+      setNewName(customer.name || customer.personalInfo?.name || '')
+    }
+  }, [editNameDialogOpen, customer])
 
   if (loading) {
     return (
@@ -375,9 +432,18 @@ const CustomerDetail: React.FC = () => {
                     </Typography>
                     <Stack spacing={2}>
                       <Box>
-                        <Typography variant="body2" color="text.secondary">
-                          Full Name
-                        </Typography>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body2" color="text.secondary">
+                            Full Name
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => setEditNameDialogOpen(true)}
+                            sx={{ ml: 'auto' }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
                         <Typography variant="body1">
                           {customer.name || customer.personalInfo?.name || 'Not provided'}
                         </Typography>
@@ -471,10 +537,111 @@ const CustomerDetail: React.FC = () => {
         {/* Booking History Tab */}
         {selectedTab === 1 && (
           <CardContent>
+            {/* Summary Metrics */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight="bold" color="primary">
+                    {bookingSummary.total}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Total Bookings
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight="bold" color="success.main">
+                    {bookingSummary.completed}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Completed
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight="bold" color="error.main">
+                    {bookingSummary.cancelled}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Cancelled
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight="bold" color="primary">
+                    ₹{bookingSummary.averageFare.toFixed(2)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Avg Fare
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Filters */}
+            <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={bookingStatusFilter}
+                  label="Status"
+                  onChange={(e) => {
+                    setBookingStatusFilter(e.target.value)
+                    if (e.target.value !== 'all') {
+                      loadBookings(e.target.value)
+                    } else {
+                      loadBookings()
+                    }
+                  }}
+                >
+                  <MenuItem value="all">All Status</MenuItem>
+                  <MenuItem value="pending">Pending</MenuItem>
+                  <MenuItem value="accepted">Accepted</MenuItem>
+                  <MenuItem value="in_progress">In Progress</MenuItem>
+                  <MenuItem value="completed">Completed</MenuItem>
+                  <MenuItem value="cancelled">Cancelled</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                label="From Date"
+                type="date"
+                value={bookingDateFrom}
+                onChange={(e) => setBookingDateFrom(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: 150 }}
+              />
+              <TextField
+                size="small"
+                label="To Date"
+                type="date"
+                value={bookingDateTo}
+                onChange={(e) => setBookingDateTo(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: 150 }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<FilterListIcon />}
+                onClick={() => {
+                  setBookingStatusFilter('all')
+                  setBookingDateFrom('')
+                  setBookingDateTo('')
+                  loadBookings()
+                }}
+              >
+                Clear Filters
+              </Button>
+            </Box>
+
             <Typography variant="h6" gutterBottom>
-              Booking History ({bookings.length} bookings)
+              Booking History ({filteredBookings.length} of {bookings.length} bookings)
             </Typography>
-            {bookings.length > 0 ? (
+            {filteredBookings.length > 0 ? (
               <TableContainer>
                 <Table>
                   <TableHead>
@@ -485,25 +652,26 @@ const CustomerDetail: React.FC = () => {
                       <TableCell>Status</TableCell>
                       <TableCell>Fare</TableCell>
                       <TableCell>Date</TableCell>
+                      <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {bookings.map((booking) => (
-                      <TableRow key={booking.id}>
+                    {filteredBookings.map((booking) => (
+                      <TableRow key={booking.id} hover>
                         <TableCell>
                           <Typography variant="body2" fontFamily="monospace">
-                            {booking.id.substring(0, 8)}...
+                            #{booking.id.substring(0, 8)}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Box>
-                            <Typography variant="body2">
+                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
                               <LocationIcon sx={{ fontSize: 16, mr: 1, verticalAlign: 'middle' }} />
-                              {booking.pickupLocation.address}
+                              {booking.pickupLocation?.address || booking.pickup?.address || 'N/A'}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
                               <LocationIcon sx={{ fontSize: 16, mr: 1, verticalAlign: 'middle' }} />
-                              {booking.dropoffLocation.address}
+                              {booking.dropoffLocation?.address || booking.dropoff?.address || 'N/A'}
                             </Typography>
                           </Box>
                         </TableCell>
@@ -523,14 +691,31 @@ const CustomerDetail: React.FC = () => {
                           />
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2">
-                            ₹{booking.fare}
+                          <Typography variant="body2" fontWeight="600">
+                            ₹{(() => {
+                              const fareValue = 
+                                booking.pricing?.totalFare || 
+                                (typeof booking.fare === 'object' ? (booking.fare.totalFare || booking.fare.total) : null) ||
+                                booking.totalFare ||
+                                (typeof booking.fare === 'number' ? booking.fare : 0) ||
+                                0
+                              return fareValue
+                            })()}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
                             {new Date(booking.createdAt).toLocaleDateString()}
                           </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <IconButton
+                            size="small"
+                            onClick={() => navigate(`/bookings?bookingId=${booking.id}`)}
+                            title="View in Booking Management"
+                          >
+                            <OpenInNewIcon fontSize="small" />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -540,7 +725,9 @@ const CustomerDetail: React.FC = () => {
             ) : (
               <Box sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body1" color="text.secondary">
-                  No bookings found for this customer.
+                  {bookings.length === 0 
+                    ? 'No bookings found for this customer.'
+                    : 'No bookings match the selected filters.'}
                 </Typography>
               </Box>
             )}
@@ -622,6 +809,56 @@ const CustomerDetail: React.FC = () => {
             variant="contained"
           >
             {customer.accountStatus === 'suspended' ? 'Unsuspend' : 'Suspend'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Name Dialog */}
+      <Dialog open={editNameDialogOpen} onClose={() => setEditNameDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
+        <DialogTitle>Edit Customer Name</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Customer Name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            margin="normal"
+            required
+            placeholder="Enter new customer name"
+            helperText="This will update the customer's display name"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setEditNameDialogOpen(false)
+            setNewName('')
+          }} disabled={updatingName}>
+            Cancel
+          </Button>
+          <Button
+            onClick={async () => {
+              if (customer && newName.trim()) {
+                setUpdatingName(true)
+                try {
+                  const response = await customerService.updateCustomerName(customer.id, newName.trim())
+                  if (response.success) {
+                    setCustomer({ ...customer, name: newName.trim() })
+                    setEditNameDialogOpen(false)
+                    setNewName('')
+                  } else {
+                    alert(response.error?.message || 'Failed to update customer name')
+                  }
+                } catch (error: any) {
+                  alert(error.message || 'Failed to update customer name')
+                } finally {
+                  setUpdatingName(false)
+                }
+              }
+            }}
+            variant="contained"
+            disabled={!newName.trim() || updatingName}
+          >
+            {updatingName ? 'Updating...' : 'Update Name'}
           </Button>
         </DialogActions>
       </Dialog>

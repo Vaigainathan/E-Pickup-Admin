@@ -15,6 +15,9 @@ interface RealTimeEventHandlers {
   onSupportTicket?: (ticket: any) => void
   onPaymentCompleted?: (data: any) => void
   onDeliveryCompleted?: (data: any) => void
+  onWalletUpdate?: (data: any) => void
+  onRevenueUpdate?: (data: any) => void
+  onTransactionUpdate?: (data: any) => void
 }
 
 class RealTimeService {
@@ -218,6 +221,23 @@ class RealTimeService {
     this.socket.on('admin_notification', (data) => {
       console.log('🔔 Admin notification received:', data)
       this.eventHandlers.onNotification?.(data)
+    })
+
+    // Wallet and revenue events
+    this.socket.on('wallet:driver:update', (data) => {
+      console.log('💰 Driver wallet updated:', data)
+      this.eventHandlers.onWalletUpdate?.(data)
+    })
+
+    this.socket.on('wallet:transaction:new', (data) => {
+      console.log('💰 New wallet transaction:', data)
+      this.eventHandlers.onTransactionUpdate?.(data)
+      this.eventHandlers.onWalletUpdate?.(data)
+    })
+
+    this.socket.on('revenue:update', (data) => {
+      console.log('💰 Revenue updated:', data)
+      this.eventHandlers.onRevenueUpdate?.(data)
     })
 
     // General events

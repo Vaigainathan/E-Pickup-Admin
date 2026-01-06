@@ -57,9 +57,12 @@ import {
   Close as CloseIcon,
   Delete as DeleteIcon,
   OpenInNew as OpenInNewIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { bookingService } from '../services/bookingService'
+import BookingInterventionDialog from '../components/BookingInterventionDialog'
+import { Booking as BookingType } from '../types'
 
 // Modern Color Theme
 const theme = {
@@ -371,6 +374,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [interventionDialogOpen, setInterventionDialogOpen] = useState(false)
   const [newStatus, setNewStatus] = useState('')
   const [deleteReason, setDeleteReason] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
@@ -2484,8 +2488,33 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           <Button onClick={() => setViewDialogOpen(false)}>
             Close
           </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={<WarningIcon />}
+            onClick={() => {
+              setInterventionDialogOpen(true)
+            }}
+            sx={{ ml: 1 }}
+          >
+            Intervene
+          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Booking Intervention Dialog */}
+      <BookingInterventionDialog
+        open={interventionDialogOpen}
+        booking={selectedBooking as BookingType | null}
+        onClose={() => {
+          setInterventionDialogOpen(false)
+        }}
+        onSuccess={() => {
+          // Refresh bookings after successful intervention
+          fetchBookings()
+          setViewDialogOpen(false)
+        }}
+      />
 
       {/* Status Update Dialog */}
       <Dialog

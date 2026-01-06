@@ -11,11 +11,26 @@ interface AdminSettings {
   timezone: string
 }
 
+interface SystemBackup {
+  id: string
+  backupId: string
+  createdAt: string
+  size: number
+  status: 'completed' | 'in_progress' | 'failed'
+  createdBy: string
+  createdByName?: string
+  description?: string
+  downloadUrl?: string
+  expiresAt?: string
+}
+
 interface SettingsState {
   settings: AdminSettings
   loading: boolean
   error: string | null
   lastUpdated: string | null
+  backups: SystemBackup[]
+  backupsLoading: boolean
 }
 
 const initialState: SettingsState = {
@@ -31,6 +46,8 @@ const initialState: SettingsState = {
   loading: false,
   error: null,
   lastUpdated: null,
+  backups: [],
+  backupsLoading: false,
 }
 
 // Async thunks
@@ -106,6 +123,18 @@ export const restartSystem = createAsyncThunk(
   }
 )
 
+export const fetchBackups = createAsyncThunk(
+  'settings/fetchBackups',
+  async (_, { rejectWithValue }) => {
+    try {
+      const backups = await settingsService.getBackupList()
+      return backups
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to fetch backups')
+    }
+  }
+)
+
 const settingsSlice = createSlice({
   name: 'settings',
   initialState,
@@ -159,6 +188,7 @@ const settingsSlice = createSlice({
       })
       .addCase(backupData.fulfilled, (state) => {
         state.loading = false
+        // Note: Component should call fetchBackups() after successful backup
       })
       .addCase(backupData.rejected, (state, action) => {
         state.loading = false
@@ -198,6 +228,19 @@ const settingsSlice = createSlice({
       })
       .addCase(restartSystem.rejected, (state, action) => {
         state.loading = false
+        state.error = action.payload as string
+      })
+      // Fetch Backups
+      .addCase(fetchBackups.pending, (state) => {
+        state.backupsLoading = true
+        state.error = null
+      })
+      .addCase(fetchBackups.fulfilled, (state, action) => {
+        state.backupsLoading = false
+        state.backups = action.payload as SystemBackup[]
+      })
+      .addCase(fetchBackups.rejected, (state, action) => {
+        state.backupsLoading = false
         state.error = action.payload as string
       })
   },

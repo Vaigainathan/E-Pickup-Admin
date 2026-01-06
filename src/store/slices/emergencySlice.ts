@@ -198,8 +198,8 @@ const emergencySlice = createSlice({
       .addCase(respondToEmergency.fulfilled, (state, action) => {
         const index = state.alerts.findIndex(alert => alert.id === action.payload.alertId)
         if (index !== -1 && state.alerts[index]) {
-state.alerts[index]!.response = (action.payload as any).response
-state.alerts[index]!.status = 'responded'
+          state.alerts[index]!.response = (action.payload as any).response
+          state.alerts[index]!.status = 'responded'
         }
         if (state.selectedAlert?.id === action.payload.alertId) {
           state.selectedAlert.response = (action.payload as any).response

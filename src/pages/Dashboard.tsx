@@ -215,6 +215,10 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   // Revenue state
   const [revenueLoading, setRevenueLoading] = useState(false)
   const [revenueData, setRevenueData] = useState<any>(null)
+  
+  // Verification statistics state
+  const [verificationStats, setVerificationStats] = useState<any>(null)
+  const [verificationStatsLoading, setVerificationStatsLoading] = useState(false)
 
   // Initialize service with better error handling
   useEffect(() => {
@@ -398,13 +402,32 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             color: driver?.vehicleInfo?.color || driver?.vehicle?.color || 'Unknown',
             plateNumber: driver?.vehicleInfo?.plateNumber || driver?.vehicle?.plateNumber || 'Unknown'
           },
-          // ✅ CORE FIX: Ensure status and verification flags - check both nested and top-level
+          // ✅ CRITICAL FIX: Ensure status and verification flags - ONLY verify if ALL documents are verified
           isActive: driver?.isActive !== false,
-          isVerified: driver?.isVerified === true || 
-                     driver?.driver?.isVerified === true || 
-                     driver?.driver?.verificationStatus === 'approved' ||
-                     driver?.driver?.verificationStatus === 'verified' ||
-                     driver?.status === 'verified',
+          // Check document verification status - driver is ONLY verified if ALL documents are verified
+          isVerified: (() => {
+            const documents = driver?.documents || driver?.driver?.documents || {}
+            const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
+            let verifiedDocs = 0
+            let totalDocs = 0
+            
+            requiredDocTypes.forEach(docType => {
+              const doc = documents[docType]
+              if (doc && (doc.url || doc.downloadURL)) {
+                totalDocs++
+                const isDocVerified = doc.status === 'verified' || 
+                                     doc.verified === true || 
+                                     doc.verificationStatus === 'verified' ||
+                                     doc.verificationStatus === 'approved'
+                if (isDocVerified) {
+                  verifiedDocs++
+                }
+              }
+            })
+            
+            // ONLY return true if ALL required documents are verified
+            return totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length
+          })(),
           status: driver?.status || 'pending',
           createdAt: driver?.createdAt || new Date().toISOString()
         }))
@@ -679,6 +702,29 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     }
   }, [])
 
+  // Fetch verification statistics
+  const fetchVerificationStats = useCallback(async () => {
+    try {
+      setVerificationStatsLoading(true)
+      console.log('📊 Fetching verification statistics...')
+      
+      const response = await comprehensiveAdminService.getVerificationStatistics()
+      
+      if (response.success && response.data) {
+        setVerificationStats(response.data)
+        console.log('✅ Verification statistics fetched successfully')
+      } else {
+        console.log('⚠️ Verification stats fetch failed:', response.error?.message)
+        setVerificationStats(null)
+      }
+    } catch (error) {
+      console.error('❌ Error fetching verification stats:', error)
+      setVerificationStats(null)
+    } finally {
+      setVerificationStatsLoading(false)
+    }
+  }, [])
+
   // Fetch all data
   // ✅ NEW: Fetch cancellations
   const fetchCancellations = useCallback(async () => {
@@ -722,7 +768,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         fetchSystemHealth(),
         fetchCustomers(),
         fetchRevenue(),
-        fetchCancellations() // ✅ NEW: Fetch cancellations
+        fetchCancellations(), // ✅ NEW: Fetch cancellations
+        fetchVerificationStats() // ✅ NEW: Fetch verification statistics
       ])
       
       setLastUpdated(new Date())
@@ -734,7 +781,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     } finally {
       setIsLoading(false)
     }
-  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers, fetchCancellations])
+  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers, fetchCancellations, fetchVerificationStats])
 
   // Initial data fetch
   useEffect(() => {
@@ -1316,6 +1363,21 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             color={AdminColors.drivers}
             subtitle={`${metrics.drivers.active} active`}
             loading={driversLoading}
+            onClick={() => navigate('/drivers')}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard
+            title="Verification Stats"
+            value={verificationStats?.pendingVerifications || metrics.drivers.pending}
+            icon={<SecurityIcon />}
+            color={AdminColors.warning}
+            subtitle={
+              verificationStats 
+                ? `Avg: ${verificationStats.averageVerificationTime || 0}h | Reject: ${verificationStats.rejectionRate || 0}%`
+                : `${metrics.drivers.pending} pending`
+            }
+            loading={verificationStatsLoading}
             onClick={() => navigate('/drivers')}
           />
         </Grid>

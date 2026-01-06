@@ -59,13 +59,19 @@ class BookingService {
 
   async interveneBooking(
     bookingId: string,
-    action: string,
-    reason?: string
-  ): Promise<{ action: string; message: string }> {
+    action: 'reassign_driver' | 'cancel_booking' | 'update_fare' | 'send_notification',
+    reason: string,
+    details?: {
+      newDriverId?: string
+      newFare?: number
+      notificationMessage?: string
+    }
+  ): Promise<{ action: string; message: string; data?: any }> {
     // ✅ CRITICAL FIX: Use correct backend endpoint
     const response = await apiService.post(`/api/admin/bookings/${bookingId}/intervene`, {
       action,
       reason,
+      ...details,
     })
     if (response.success && response.data) {
       return response.data as any

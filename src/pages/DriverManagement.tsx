@@ -245,31 +245,66 @@ const PulseBadge = styled(Badge)(() => ({
 }))
 
 // ✅ Helper function to get clear verification status label and color
+// ✅ CRITICAL FIX: Trust backend status when available, use document checking as fallback
 const getVerificationStatus = (driver: any) => {
-  // ✅ CRITICAL FIX: Check documents FIRST - documents are the source of truth
-  // This ensures verified drivers show as verified even if isVerified/status fields are incorrect
+  // ✅ CRITICAL FIX: First check backend-calculated status (backend already verified documents)
+  const backendStatus = driver?.status || driver?.verificationStatus
+  const backendIsVerified = driver?.isVerified === true
+  
+  // ✅ CRITICAL FIX: If backend says verified, trust it immediately
+  if (backendIsVerified && (backendStatus === 'verified' || backendStatus === 'approved')) {
+    console.log('✅ [getVerificationStatus] Using backend verified status for driver:', {
+      driverId: driver?.id || driver?.uid,
+      backendStatus,
+      backendIsVerified
+    })
+    return { label: 'Verified', color: 'success' as const }
+  }
+  
+  // ✅ CRITICAL FIX: If backend says rejected, trust it
+  if (backendStatus === 'rejected') {
+    console.log('✅ [getVerificationStatus] Using backend rejected status for driver:', {
+      driverId: driver?.id || driver?.uid,
+      backendStatus
+    })
+    return { label: 'Rejected', color: 'error' as const }
+  }
+  
+  // ✅ CRITICAL: Get documents from multiple possible locations for fallback checking
   const documents = driver?.documents || (driver as any)?.driver?.documents || {}
   const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto']
   let totalDocs = 0
   let verifiedDocs = 0
   let rejectedDocs = 0
   
+  // ✅ CRITICAL: Loop through ALL required document types
   requiredDocTypes.forEach(docType => {
     // Try both camelCase and snake_case keys
     const camelKey = docType
     const snakeKey = docType.replace(/([A-Z])/g, '_$1').toLowerCase()
     const doc = documents[camelKey as keyof typeof documents] || documents[snakeKey as keyof typeof documents]
     
-    if (doc && (doc.url || doc.downloadURL)) {
+    // ✅ CRITICAL: Check if document exists and has a URL
+    // A document is considered "uploaded" ONLY if it has a URL
+    const hasUrl = !!(doc && (doc.url || doc.downloadURL))
+    
+    if (hasUrl) {
       totalDocs++
-      const isDocVerified = doc.status === 'verified' || 
+      
+      // ✅ CRITICAL: Check ALL possible verification status fields
+      // Priority: verificationStatus > status > verified boolean
+      const docStatus = doc.verificationStatus || doc.status
+      const isDocVerified = docStatus === 'verified' || 
+                           docStatus === 'approved' ||
                            doc.verified === true || 
-                           doc.verificationStatus === 'verified' ||
-                           doc.verificationStatus === 'approved' ||
-                           doc.status === 'approved'
-      const isDocRejected = doc.status === 'rejected' || 
-                           doc.verificationStatus === 'rejected' ||
-                           doc.rejected === true
+                           doc.verified === 'true' ||
+                           (typeof doc.verified === 'string' && doc.verified.toLowerCase() === 'verified') ||
+                           (typeof docStatus === 'string' && docStatus.toLowerCase() === 'verified') ||
+                           (typeof docStatus === 'string' && docStatus.toLowerCase() === 'approved')
+      
+      const isDocRejected = docStatus === 'rejected' || 
+                           doc.rejected === true ||
+                           (typeof doc.rejected === 'string' && doc.rejected.toLowerCase() === 'rejected')
       
       if (isDocVerified) {
         verifiedDocs++
@@ -279,48 +314,53 @@ const getVerificationStatus = (driver: any) => {
     }
   })
   
-  // ✅ CRITICAL: If all documents are verified, show as Verified (regardless of isVerified/status fields)
-  // This is the source of truth - if all documents are verified, driver is verified
-  if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
-    return { label: 'Verified', color: 'success' as const }
+  console.log('📊 [getVerificationStatus] Document check summary:', {
+    driverId: driver?.id || driver?.uid,
+    backendStatus,
+    backendIsVerified,
+    totalDocs,
+    verifiedDocs,
+    rejectedDocs,
+    requiredCount: requiredDocTypes.length
+  })
+  
+  // ✅ CRITICAL: Calculate status from documents (fallback if backend status not available)
+  // Priority order: 1) No docs → Not Uploaded, 2) Rejected docs → Rejected, 3) All verified → Verified, 4) Some docs → Pending
+  
+  // ✅ CRITICAL: If no documents uploaded at all → Not Uploaded
+  if (totalDocs === 0) {
+    // ✅ FIX: Check if backend says not_uploaded, otherwise might be pending
+    if (backendStatus === 'not_uploaded') {
+      return { label: 'Not Uploaded', color: 'default' as const }
+    }
+    // If backend says pending but no docs, show Not Uploaded
+    return { label: 'Not Uploaded', color: 'default' as const }
   }
   
-  // ✅ CRITICAL: If any document is rejected, show as Rejected
+  // ✅ CRITICAL: If any document is rejected → Rejected
   if (rejectedDocs > 0) {
     return { label: 'Rejected', color: 'error' as const }
   }
   
-  // ✅ CRITICAL: If no documents uploaded at all, show as Not Uploaded
-  if (totalDocs === 0) {
-    return { label: 'Not Uploaded', color: 'default' as const }
+  // ✅ CRITICAL: If all documents are verified → Verified
+  // This is the source of truth - if all documents are verified, driver is verified
+  if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
+    console.log('✅ [getVerificationStatus] All documents verified - returning Verified')
+    return { label: 'Verified', color: 'success' as const }
   }
   
-  // ✅ CRITICAL: If documents uploaded but not all verified, show as Pending Verification
+  // ✅ CRITICAL: If documents uploaded but not all verified → Pending Verification
+  // This covers: some docs uploaded but not all, or docs uploaded but not verified
   if (totalDocs > 0 && verifiedDocs < requiredDocTypes.length) {
     return { label: 'Pending Verification', color: 'warning' as const }
   }
   
-  // ✅ FALLBACK: If documents can't be determined (e.g., documents object is empty or malformed),
-  // check isVerified/status fields as a last resort
-  // BUT: Only trust these if driver was already verified - don't downgrade verified drivers
-  if (driver.isVerified === true || driver.status === 'verified' || driver.status === 'approved') {
-    // Driver is marked as verified - trust this status (might be verified but documents not accessible)
-    return { label: 'Verified', color: 'success' as const }
-  }
-  
-  if (driver.status === 'not_uploaded') {
-    return { label: 'Not Uploaded', color: 'default' as const }
-  }
-  
-  if (driver.status === 'pending_verification' || driver.status === 'pending') {
+  // ✅ CRITICAL: Default fallback - use backend status if available, otherwise Pending
+  if (backendStatus === 'pending_verification' || backendStatus === 'pending') {
     return { label: 'Pending Verification', color: 'warning' as const }
   }
   
-  if (driver.status === 'rejected') {
-    return { label: 'Rejected', color: 'error' as const }
-  }
-  
-  // Default fallback
+  // Final fallback
   return { label: 'Pending Verification', color: 'warning' as const }
 }
 
@@ -424,11 +464,29 @@ const ModernDriverManagement: React.FC = React.memo(() => {
           // ✅ CRITICAL: Preserve isVerified from service FIRST - this is the source of truth
           // The service already calculated this correctly based on documents
           const serviceIsVerified = driver.isVerified;
+          const serviceStatus = driver.status || driver.verificationStatus;
+          
+          // ✅ DEBUG: Log backend status for troubleshooting
+          if (process.env.NODE_ENV === 'development' && (serviceIsVerified || serviceStatus === 'verified')) {
+            console.log('✅ [fetchDrivers] Driver with verified status from backend:', {
+              driverId: driver.id || driver.uid,
+              name: driver.name || driver.personalInfo?.name,
+              isVerified: serviceIsVerified,
+              status: serviceStatus,
+              verificationStatus: driver.verificationStatus
+            });
+          }
           
           return {
             ...driver,
-            // ✅ CRITICAL: Preserve status field from service (not_uploaded, pending_verification, verified, rejected)
-            status: driver.status || 'pending',
+            // ✅ CRITICAL FIX: Preserve status field from service (not_uploaded, pending_verification, verified, rejected)
+            // Backend already calculated this from documents, so preserve it exactly
+            // ✅ IMPORTANT: Map 'pending' to 'pending_verification' for consistency, but preserve 'verified' as-is
+            status: serviceStatus === 'verified' || serviceStatus === 'approved' 
+              ? 'verified' 
+              : serviceStatus === 'pending' 
+                ? 'pending_verification' 
+                : serviceStatus || 'pending_verification',
             // Ensure proper data structure with validation
             personalInfo: {
               name: driver?.personalInfo?.name || driver?.name || 'Driver',
@@ -452,31 +510,27 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               licenseNumber: driver?.driver?.vehicleDetails?.licenseNumber || 'Not provided',
               licenseExpiry: driver?.driver?.vehicleDetails?.licenseExpiry || 'Not provided',
             },
-            // ✅ CRITICAL FIX: Use isVerified from service if available, otherwise calculate as fallback
-            // The service already calculated this correctly, so we preserve it
+            // ✅ CRITICAL FIX: Trust backend-calculated isVerified when available, use document check as fallback
+            // Backend already calculated this correctly based on documents, so prioritize backend value
             isVerified: (() => {
-              // ✅ CRITICAL: If service already calculated isVerified, use it (it's the source of truth)
-              if (serviceIsVerified !== undefined) {
-                return serviceIsVerified;
+              // ✅ CRITICAL FIX: If backend says verified and status matches, trust it immediately
+              if (serviceIsVerified === true && (serviceStatus === 'verified' || serviceStatus === 'approved')) {
+                console.log('✅ [fetchDrivers] Using backend isVerified=true for driver:', {
+                  driverId: driver.id || driver.uid,
+                  serviceIsVerified,
+                  serviceStatus
+                });
+                return true;
               }
               
-              // ✅ FALLBACK: Only calculate if service didn't provide it
-              // Check if all required documents are verified - read from multiple possible locations
+              // ✅ CRITICAL FIX: If backend explicitly says not verified and status is not verified, trust it
+              if (serviceIsVerified === false && serviceStatus !== 'verified' && serviceStatus !== 'approved') {
+                return false;
+              }
+              
+              // ✅ FALLBACK: If backend isVerified is not provided or unclear, check documents
               const documents = driver?.documents || driver?.driver?.documents || {};
               const requiredDocTypes = ['drivingLicense', 'aadhaarCard', 'bikeInsurance', 'rcBook', 'profilePhoto'];
-              
-              // ✅ SAFETY CHECK: Check if driver was already verified BEFORE checking documents
-              const wasAlreadyVerified = driver?.driver?.verificationStatus === 'verified' || 
-                                        driver?.driver?.verificationStatus === 'approved' ||
-                                        driver?.verificationStatus === 'verified' ||
-                                        driver?.verificationStatus === 'approved' ||
-                                        driver?.driver?.isVerified === true ||
-                                        driver?.isVerified === true;
-              
-              const isWorking = (driver?.totalTrips && driver.totalTrips > 0) || 
-                              (driver?.totalDeliveries && driver.totalDeliveries > 0) ||
-                              driver?.isActive === true ||
-                              driver?.isOnline === true;
               
               let verifiedDocs = 0;
               let totalDocs = 0;
@@ -490,17 +544,18 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                 
                 if (doc && (doc.url || doc.downloadURL)) {
                   totalDocs++;
-                  // Check multiple verification status fields - be more lenient for already-verified drivers
+                  // Check multiple verification status fields
                   const isDocVerified = doc.status === 'verified' || 
+                                       doc.status === 'approved' ||
                                        doc.verified === true || 
+                                       doc.verified === 'true' ||
                                        doc.verificationStatus === 'verified' ||
                                        doc.verificationStatus === 'approved' ||
-                                       doc.status === 'approved' ||
-                                       // If document has URL and no explicit rejection, consider it verified if driver was verified and working
-                                       (wasAlreadyVerified && isWorking && doc.url && !doc.status && !doc.verificationStatus && !doc.rejected);
+                                       (typeof doc.verified === 'string' && doc.verified.toLowerCase() === 'verified');
                   const isDocRejected = doc.status === 'rejected' || 
                                        doc.verificationStatus === 'rejected' ||
-                                       doc.rejected === true;
+                                       doc.rejected === true ||
+                                       (typeof doc.rejected === 'string' && doc.rejected.toLowerCase() === 'rejected');
                   
                   if (isDocVerified) {
                     verifiedDocs++;
@@ -510,39 +565,17 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                 }
               });
               
-              // ✅ CRITICAL: Driver is verified if ALL required documents are verified
+              // ✅ CRITICAL: Driver is verified ONLY if ALL required documents are verified
               if (totalDocs === requiredDocTypes.length && verifiedDocs === requiredDocTypes.length) {
+                console.log('✅ [fetchDrivers] Calculated isVerified=true from documents:', {
+                  driverId: driver.id || driver.uid,
+                  verifiedDocs,
+                  totalDocs
+                });
                 return true;
               }
               
-              // ✅ CRITICAL: Check documents FIRST - this is the source of truth
-              // If no documents uploaded at all → NOT verified
-              if (totalDocs === 0) {
-                return false;
-              }
-              
-              // ✅ CRITICAL: If documents uploaded but not all verified → NOT verified
-              if (totalDocs > 0 && verifiedDocs < requiredDocTypes.length) {
-                return false;
-              }
-              
-              // ✅ SAFETY CHECK: Only preserve verified status if driver was verified AND has verified documents
-              // This prevents breaking already-verified drivers who have verified documents
-              if (wasAlreadyVerified && verifiedDocs > 0 && rejectedDocs === 0) {
-                // If driver has verified documents and was verified, preserve status
-                // But only if we found verified documents (not if no documents found)
-                if (verifiedDocs === requiredDocTypes.length) {
-                  // All documents verified - definitely verified
-                  return true;
-                } else if (isWorking && verifiedDocs > 0) {
-                  // Driver is working and has some verified documents - preserve verified status
-                  // This handles cases where documents might be in different format but driver is working
-                  console.log(`✅ Preserving verified status for working driver (was verified, is working, has ${verifiedDocs}/${totalDocs} verified documents)`);
-                  return true;
-                }
-              }
-              
-              // ✅ CRITICAL: For new drivers or drivers without verified documents, strict check applies
+              // ✅ CRITICAL: If no documents or not all verified → NOT verified
               return false;
             })(),
             rating: Math.max(0, Math.min(5, driver?.rating || 0)), // Clamp rating between 0-5
@@ -792,7 +825,12 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         apiService.getDriverWorkSlots(driverId)
           .then((response) => {
             if (response.success && response.data) {
-              setWorkSlots(Array.isArray(response.data) ? response.data : [])
+              const slots = Array.isArray(response.data)
+                ? response.data
+                : Array.isArray((response.data as any)?.slots)
+                  ? (response.data as any).slots
+                  : []
+              setWorkSlots(slots)
             } else {
               setWorkSlots([])
             }
@@ -1194,10 +1232,13 @@ const ModernDriverManagement: React.FC = React.memo(() => {
 
           {/* Status Chips */}
           <Box display="flex" alignItems="center" gap={1} mb={3} flexWrap="wrap">
-            <Chip
-              label={getVerificationStatus(driver).label}
-              color={getVerificationStatus(driver).color}
-              size="small"
+            {(() => {
+              const status = getVerificationStatus(driver);
+              return (
+                <Chip
+                  label={status.label}
+                  color={status.color}
+                  size="small"
               sx={{ 
                 fontWeight: 600,
                 fontSize: '0.75rem',
@@ -1206,7 +1247,9 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                   px: 1.5
                 }
               }}
-            />
+                />
+              );
+            })()}
             <Chip
               label={getOnlineStatus(driver).status}
               color={getOnlineStatus(driver).color as any}
@@ -2444,11 +2487,16 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                           </Box>
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={getVerificationStatus(driver).label}
-                            color={getVerificationStatus(driver).color}
-                            size="small"
-                          />
+                          {(() => {
+                            const status = getVerificationStatus(driver);
+                            return (
+                              <Chip
+                                label={status.label}
+                                color={status.color}
+                                size="small"
+                              />
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -2816,6 +2864,9 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                             <TableCell>Start Time</TableCell>
                             <TableCell>End Time</TableCell>
                             <TableCell>Status</TableCell>
+                            <TableCell>Selected</TableCell>
+                            <TableCell>Selected At</TableCell>
+                            <TableCell>Orders</TableCell>
                             <TableCell>Location</TableCell>
                           </TableRow>
                         </TableHead>
@@ -2823,8 +2874,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                           {workSlots.map((slot) => (
                             <TableRow key={slot.id}>
                               <TableCell>{slot.date ? new Date(slot.date).toLocaleDateString() : 'N/A'}</TableCell>
-                              <TableCell>{slot.startTime || 'N/A'}</TableCell>
-                              <TableCell>{slot.endTime || 'N/A'}</TableCell>
+                              <TableCell>{slot.startTime ? new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</TableCell>
+                              <TableCell>{slot.endTime ? new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</TableCell>
                               <TableCell>
                                 <Chip
                                   label={slot.status || 'unknown'}
@@ -2839,6 +2890,34 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                                       : 'default'
                                   }
                                 />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={slot.isSelected ? 'Selected' : 'Not selected'}
+                                  size="small"
+                                  color={slot.isSelected ? 'success' : 'default'}
+                                  variant={slot.isSelected ? 'filled' : 'outlined'}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {slot.selectedAt ? new Date(slot.selectedAt).toLocaleString() : 'N/A'}
+                              </TableCell>
+                              <TableCell>
+                                <Box>
+                                  <Typography variant="body2" fontWeight={600}>
+                                    {slot.bookingSummary?.totalBookings ?? 0} total
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {slot.bookingSummary?.completedBookings ?? 0} completed · {slot.bookingSummary?.activeBookings ?? 0} active
+                                  </Typography>
+                                  {(slot.bookingSummary?.sampleBookings || []).length > 0 && (
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                      {slot.bookingSummary.sampleBookings
+                                        .map((booking: any) => `${booking.id} (${booking.status})`)
+                                        .join(', ')}
+                                    </Typography>
+                                  )}
+                                </Box>
                               </TableCell>
                               <TableCell>{slot.location?.address || 'N/A'}</TableCell>
                             </TableRow>

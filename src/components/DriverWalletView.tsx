@@ -314,7 +314,7 @@ const DriverWalletView: React.FC<DriverWalletViewProps> = ({ driverId, driverNam
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" fontFamily="monospace">
-                            {topUp.phonepeTransactionId || topUp.id}
+                            {topUp.razorpayPaymentId || topUp.razorpayPaymentLinkId || topUp.phonepeTransactionId || topUp.id}
                           </Typography>
                         </TableCell>
                       </TableRow>

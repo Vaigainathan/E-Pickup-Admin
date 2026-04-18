@@ -522,6 +522,9 @@ export interface WorkSlot {
   endTime: string
   date: string
   status: 'scheduled' | 'active' | 'completed' | 'cancelled'
+  isSelected?: boolean
+  selectedAt?: string | null
+  preservedFromDate?: string | null
   location?: {
     address: string
     latitude: number
@@ -531,6 +534,20 @@ export interface WorkSlot {
   notes?: string
   createdAt: string
   updatedAt?: string
+  bookingSummary?: {
+    totalBookings: number
+    completedBookings: number
+    activeBookings: number
+    cancelledBookings: number
+    sampleBookings: Array<{
+      id: string
+      status: string
+      customerName: string
+      referenceTime?: string | null
+      createdAt?: string | null
+      updatedAt?: string | null
+    }>
+  }
 }
 
 // Rejection History Types

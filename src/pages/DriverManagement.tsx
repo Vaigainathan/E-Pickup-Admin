@@ -2867,13 +2867,13 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                             <TableCell>Selected</TableCell>
                             <TableCell>Selected At</TableCell>
                             <TableCell>Orders</TableCell>
-                            <TableCell>Location</TableCell>
+                            <TableCell>Slot</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {workSlots.map((slot) => (
                             <TableRow key={slot.id}>
-                              <TableCell>{slot.date ? new Date(slot.date).toLocaleDateString() : 'N/A'}</TableCell>
+                              <TableCell>{slot.date ? new Date(slot.date).toLocaleDateString() : (slot.startTime ? new Date(slot.startTime).toLocaleDateString() : 'N/A')}</TableCell>
                               <TableCell>{slot.startTime ? new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</TableCell>
                               <TableCell>{slot.endTime ? new Date(slot.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</TableCell>
                               <TableCell>
@@ -2919,7 +2919,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                                   )}
                                 </Box>
                               </TableCell>
-                              <TableCell>{slot.location?.address || 'N/A'}</TableCell>
+                              <TableCell>{slot.label || slot.slotId || 'N/A'}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

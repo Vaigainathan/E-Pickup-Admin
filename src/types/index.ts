@@ -518,13 +518,15 @@ export interface ServiceStatus {
 export interface WorkSlot {
   id: string
   driverId: string
-  startTime: string
-  endTime: string
-  date: string
+  startTime: string | Date
+  endTime: string | Date
+  date?: string | Date | null
+  label?: string
+  slotId?: string
   status: 'scheduled' | 'active' | 'completed' | 'cancelled'
   isSelected?: boolean
-  selectedAt?: string | null
-  preservedFromDate?: string | null
+  selectedAt?: string | Date | null
+  preservedFromDate?: string | Date | null
   location?: {
     address: string
     latitude: number

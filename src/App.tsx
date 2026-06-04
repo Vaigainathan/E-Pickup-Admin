@@ -39,7 +39,7 @@ function App() {
   const token = useSelector((state: RootState) => state.auth.token)
 
   // Debug logging
-  console.log('App render - isAuthenticated:', isAuthenticated, 'token:', token)
+  console.log('App render - isAuthenticated:', isAuthenticated, 'hasToken:', !!token)
 
   if (!isAuthenticated) {
     return (

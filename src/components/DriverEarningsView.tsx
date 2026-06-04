@@ -194,7 +194,7 @@ const DriverEarningsView: React.FC<DriverEarningsViewProps> = ({ driverId, drive
                 {formatCurrency(earningsData.totalEarnings)}
               </Typography>
               <Typography variant="body2" color="textSecondary" mt={1}>
-                {earningsData.tripCount} trips
+                Gross collected from customers · {earningsData.tripCount} trips
               </Typography>
             </CardContent>
           </Card>

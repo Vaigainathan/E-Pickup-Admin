@@ -727,7 +727,10 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
       
       if (response.success && response.data) {
         setRevenueData(response.data)
-        console.log('✅ Revenue data fetched successfully:', response.data)
+        console.log('✅ Revenue data fetched successfully:', {
+          hasData: !!response.data,
+          keys: Object.keys(response.data || {}),
+        })
       } else {
         console.log('⚠️ Revenue fetch failed:', response.error?.message)
         setRevenueData(null)

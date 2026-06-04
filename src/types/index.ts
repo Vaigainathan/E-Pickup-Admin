@@ -83,9 +83,11 @@ export interface Driver {
   totalTrips?: number
   earnings?: {
     total: number
+    commission?: number
+    net?: number
     thisMonth: number
     lastMonth: number
-    commission?: number
+    commissionThisMonth?: number
   }
   wallet?: {
     balance: number

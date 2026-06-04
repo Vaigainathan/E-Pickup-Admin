@@ -48,7 +48,7 @@ export class RecaptchaTest {
         return false;
       }
       
-      console.log('✅ Token generated successfully:', token.substring(0, 20) + '...');
+      console.log('✅ Token generated successfully:', { hasToken: !!token });
       return true;
     } catch (error: any) {
       console.error('❌ Token generation test failed:', error.message);

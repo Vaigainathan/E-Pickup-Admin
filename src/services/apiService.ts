@@ -31,9 +31,8 @@ class ApiService {
   async setToken(token: string, isBackendToken: boolean = false) {
     this.token = token
     console.log('🔑 [API] Token set:', { 
-      tokenLength: token.length, 
-      isBackendToken,
-      tokenPreview: token.substring(0, 20) + '...'
+      hasToken: !!token,
+      isBackendToken
     })
     
     // Update secure storage if user data exists
@@ -126,8 +125,7 @@ class ApiService {
            if (this.token) {
              console.log('🔑 [API] Making request with token:', {
                endpoint,
-               tokenLength: this.token.length,
-               tokenPreview: this.token.substring(0, 20) + '...'
+               hasToken: !!this.token
              })
            } else {
              console.log('⚠️ [API] Making request without token:', endpoint)

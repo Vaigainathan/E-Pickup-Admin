@@ -109,7 +109,7 @@ class UserTraceabilityService {
    */
   async findByPhoneNumber(phoneNumber: string): Promise<UserTraceabilityResult[]> {
     try {
-      console.log(`🔍 [TRACE] Searching for phone number: ${phoneNumber}`)
+      console.log(`🔍 [TRACE] Searching for phone number: ${phoneNumber ? `***${phoneNumber.slice(-4)}` : 'unknown'}`)
       
       const results: UserTraceabilityResult[] = []
 

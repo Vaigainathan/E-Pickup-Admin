@@ -31,6 +31,8 @@ import { AdminColors } from '../constants/Colors'
 interface RevenueStats {
   totalRevenue: number
   transactionCount: number
+  totalCommissionsDeducted?: number
+  commissionTransactionCount?: number
   averageTransactionValue: number
   revenueByPaymentMethod: Array<{
     paymentMethod: string
@@ -163,19 +165,19 @@ const RevenueDashboard: React.FC = () => {
 
       {/* Total Revenue Card */}
       <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Total Revenue
+                    Total Revenue (Top-ups)
                   </Typography>
                   <Typography variant="h4" fontWeight="bold" color={AdminColors.primary}>
                     {revenueStats ? formatCurrency(revenueStats.totalRevenue) : '₹0'}
                   </Typography>
                   <Typography variant="body2" color="textSecondary" mt={1}>
-                    {revenueStats?.transactionCount || 0} transactions
+                    Real money from driver wallet top-ups ({revenueStats?.transactionCount || 0} txns)
                   </Typography>
                 </Box>
                 <MoneyIcon sx={{ fontSize: 48, color: AdminColors.primary, opacity: 0.3 }} />
@@ -184,7 +186,27 @@ const RevenueDashboard: React.FC = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Box>
+                <Typography color="textSecondary" gutterBottom>
+                  Trip Wallet Commission
+                </Typography>
+                <Typography variant="h4" fontWeight="bold" color="#F44336">
+                  {revenueStats?.totalCommissionsDeducted != null
+                    ? formatCurrency(revenueStats.totalCommissionsDeducted)
+                    : '₹0'}
+                </Typography>
+                <Typography variant="body2" color="textSecondary" mt={1}>
+                  Points debited per trip ({revenueStats?.commissionTransactionCount || 0} deductions)
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -217,7 +239,7 @@ const RevenueDashboard: React.FC = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">

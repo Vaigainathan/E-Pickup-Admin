@@ -189,9 +189,11 @@ interface Driver {
   totalTrips?: number
   earnings?: {
     total: number
+    commission?: number
+    net?: number
     thisMonth: number
     lastMonth: number
-    commission?: number
+    commissionThisMonth?: number
   }
   wallet?: {
     balance: number
@@ -1486,7 +1488,9 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         
         if (response.success && response.data) {
           setDriverDocuments(response.data)
-          console.log('✅ All documents discovered successfully:', response.data)
+          console.log('✅ All documents discovered successfully:', {
+            documentCount: Object.keys(response.data || {}).length,
+          })
         } else {
           console.error('❌ Failed to discover documents:', response.error)
           setError(response.error?.message || 'Failed to discover driver documents')
@@ -1507,7 +1511,9 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         const response = await comprehensiveAdminService.debugDriverDocuments(selectedDriver.id)
         
         if (response.success && response.data) {
-          console.log('🔍 Debug information:', response.data)
+          console.log('🔍 Debug information received:', {
+            keys: Object.keys(response.data || {}),
+          })
           
           // Show deduplicated count (actual documents)
           const deduplicatedCount = Object.keys(response.data.userCollectionDocuments || {}).length
@@ -1532,7 +1538,9 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         const response = await apiService.post(`/api/admin/test-verification-flow/${selectedDriver.id}`)
         
         if (response.success && response.data) {
-          console.log('🧪 Test results:', response.data)
+          console.log('🧪 Test results received:', {
+            keys: Object.keys(response.data || {}),
+          })
           const testData = response.data as any
           const passedTests = testData.documentTests?.filter((test: any) => test.verificationTest === 'PASS').length || 0
           const totalTests = testData.documentTests?.length || 0
@@ -1556,7 +1564,9 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         const response = await comprehensiveAdminService.testDocumentAccess(selectedDriver.id)
         
         if (response.success && response.data) {
-          console.log('🔍 Document access test results:', response.data)
+          console.log('🔍 Document access test results:', {
+            summary: response.data?.summary,
+          })
           const testData = response.data
           const accessibleDocs = testData.summary?.accessibleDocuments || 0
           const totalDocs = testData.summary?.totalDocuments || 0
@@ -1636,7 +1646,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
         }
       )
       
-      console.log(`📥 Verification response:`, response)
+      console.log(`📥 Verification response:`, {
+        success: response.success,
+        hasData: !!response.data,
+      })
       
       if (response.success) {
         console.log(`✅ Document ${documentType} ${status} successfully`)
@@ -2550,12 +2563,19 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" color="error" fontWeight="600">
-                            {formatEarnings(driver.earnings?.commission || driver.wallet?.totalSpent || 0)}
+                            {formatEarnings(driver.earnings?.commission ?? driver.wallet?.totalSpent ?? 0)}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" color="success.main" fontWeight="600">
-                            {formatEarnings((driver.earnings?.total || 0) - (driver.earnings?.commission || driver.wallet?.totalSpent || 0))}
+                            {formatEarnings(
+                              driver.earnings?.net ??
+                                Math.max(
+                                  0,
+                                  (driver.earnings?.total || 0) -
+                                    (driver.earnings?.commission ?? driver.wallet?.totalSpent ?? 0)
+                                )
+                            )}
                           </Typography>
                         </TableCell>
                     <TableCell>

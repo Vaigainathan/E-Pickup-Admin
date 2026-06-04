@@ -1030,7 +1030,7 @@ class ComprehensiveAdminService {
             if (data.pickupVerification) {
               console.warn(`⚠️ [ADMIN_SERVICE] Pickup verification exists but photoUrl is missing/invalid for booking ${id}:`, {
                 hasPickupVerification: !!data.pickupVerification,
-                photoUrl: data.pickupVerification.photoUrl,
+                hasPhotoUrl: !!data.pickupVerification.photoUrl,
                 photoUrlType: typeof data.pickupVerification.photoUrl,
                 photoUrlLength: data.pickupVerification.photoUrl?.length
               });
@@ -1080,7 +1080,7 @@ class ComprehensiveAdminService {
             if (data.deliveryVerification) {
               console.warn(`⚠️ [ADMIN_SERVICE] Delivery verification exists but photoUrl is missing/invalid for booking ${id}:`, {
                 hasDeliveryVerification: !!data.deliveryVerification,
-                photoUrl: data.deliveryVerification.photoUrl,
+                hasPhotoUrl: !!data.deliveryVerification.photoUrl,
                 photoUrlType: typeof data.deliveryVerification.photoUrl,
                 photoUrlLength: data.deliveryVerification.photoUrl?.length
               });
@@ -3151,4 +3151,3 @@ class ComprehensiveAdminService {
 
 export const comprehensiveAdminService = new ComprehensiveAdminService()
 export default comprehensiveAdminService
-

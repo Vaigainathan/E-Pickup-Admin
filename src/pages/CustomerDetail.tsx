@@ -660,7 +660,7 @@ const CustomerDetail: React.FC = () => {
                       <TableRow key={booking.id} hover>
                         <TableCell>
                           <Typography variant="body2" fontFamily="monospace">
-                            #{booking.id.substring(0, 8)}
+                            #{booking.displayId ? String(booking.displayId).padStart(5, '0') : booking.id.substring(0, 8)}
                           </Typography>
                         </TableCell>
                         <TableCell>

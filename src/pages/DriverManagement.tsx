@@ -126,8 +126,6 @@ interface Driver {
     vehicleType: 'motorcycle' | 'electric'
     vehicleNumber: string
     vehicleModel: string
-    licenseNumber: string
-    licenseExpiry: string
   }
   documents: {
     drivingLicense?: {
@@ -509,8 +507,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               vehicleType: driver?.vehicleInfo?.make || 'motorcycle',
               vehicleNumber: driver?.vehicleInfo?.plateNumber || 'Not provided',
               vehicleModel: driver?.vehicleInfo?.model || 'Not provided',
-              licenseNumber: driver?.driver?.vehicleDetails?.licenseNumber || 'Not provided',
-              licenseExpiry: driver?.driver?.vehicleDetails?.licenseExpiry || 'Not provided',
             },
             // ✅ CRITICAL FIX: Trust backend-calculated isVerified when available, use document check as fallback
             // Backend already calculated this correctly based on documents, so prioritize backend value
@@ -2540,8 +2536,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                         <TableCell>
                           {(() => {
                             const walletBalance = driver.wallet?.balance ?? 0
-                            const isSufficient = walletBalance >= 250
-                            const isLow = walletBalance > 0 && walletBalance < 250
+                            const isSufficient = walletBalance >= 100
+                            const isLow = walletBalance > 0 && walletBalance < 100
                             const color = isSufficient ? '#4CAF50' : isLow ? '#FF9800' : '#F44336'
                             return (
                               <Chip
@@ -2770,10 +2766,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                       
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>License Number:</strong> {selectedDriver.vehicleDetails.licenseNumber}
+                      
                     </Typography>
                     <Typography variant="body2" mb={1}>
-                      <strong>License Expiry:</strong> {selectedDriver.vehicleDetails.licenseExpiry}
+                      
                     </Typography>
                     <Typography variant="body2" mb={1}>
                       
@@ -3265,12 +3261,11 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>License Number:</strong> {selectedDriver.vehicleDetails.licenseNumber}
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        <strong>License Expiry:</strong> {selectedDriver.vehicleDetails.licenseExpiry}
+                        
                       </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6} md={4}>

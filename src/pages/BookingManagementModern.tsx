@@ -88,6 +88,7 @@ const theme = {
 
 interface Booking {
   id: string
+  displayId?: number // ✅ NEW: 5-digit unique display ID (Zomato-style order ID)
   customerId: string
   driverId?: string
   pickupLocation: {
@@ -1809,7 +1810,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                     {visibleColumns.bookingId && (
                       <TableCell>
                         <Typography variant="body2" fontWeight="600" color={theme.primary}>
-                          #{booking.id.substring(0, 8)}
+                          {booking.displayId ? `#${String(booking.displayId).padStart(5, '0')}` : `#${booking.id.substring(0, 8)}`}
                         </Typography>
                       </TableCell>
                     )}
@@ -2038,7 +2039,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                   }
                   title={
                     <Typography variant="h6" fontWeight="600" color={theme.primary}>
-                      #{booking.id.substring(0, 8)}
+                      {booking.displayId ? `#${String(booking.displayId).padStart(5, '0')}` : `#${booking.id.substring(0, 8)}`}
                     </Typography>
                   }
                   action={
@@ -2531,7 +2532,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           {selectedBooking && (
             <Box>
               <Typography variant="body1" mb={2}>
-                Update status for booking #{selectedBooking.id.substring(0, 8)}
+                Update status for booking #{selectedBooking.displayId ? String(selectedBooking.displayId).padStart(5, '0') : selectedBooking.id.substring(0, 8)}
               </Typography>
               <TextField
                 fullWidth
@@ -2584,7 +2585,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                 This action cannot be undone. The booking will be permanently deleted.
               </Alert>
               <Typography variant="body1" mb={2}>
-                Are you sure you want to delete booking #{selectedBooking.id.substring(0, 8)}?
+                Are you sure you want to delete booking #{selectedBooking.displayId ? String(selectedBooking.displayId).padStart(5, '0') : selectedBooking.id.substring(0, 8)}?
               </Typography>
               <Typography variant="body2" color={theme.text.secondary} mb={2}>
                 Customer: {selectedBooking.customerName || 'Unknown'}

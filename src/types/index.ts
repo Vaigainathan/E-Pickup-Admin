@@ -53,8 +53,6 @@ export interface Driver {
     vehicleType: 'motorcycle' | 'electric' | string
     vehicleNumber: string
     vehicleModel: string
-    licenseNumber: string
-    licenseExpiry: string
   }
   documents?: {
     drivingLicense?: DocumentInfo
@@ -141,6 +139,7 @@ export interface Customer {
 export interface Booking {
   id: string
   bookingId?: string // Alternative ID field
+  displayId?: number // ✅ NEW: 5-digit unique display ID (Zomato-style order ID)
   customerId: string
   driverId?: string
   customerInfo?: {
@@ -224,6 +223,13 @@ export interface Booking {
     timeFare: number
     totalFare: number
     currency: string
+    // Tiered pricing breakdown (v2)
+    pricingVersion?: 1 | 2
+    fullKm?: number
+    remainderKm?: number
+    fullKmCharge?: number
+    remainderCharge?: number
+    calculationMethod?: 'tiered_v2' | 'ceil_v1'
   }
   // Legacy fare structure for backward compatibility
   fare?: {

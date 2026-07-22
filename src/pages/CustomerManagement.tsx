@@ -89,10 +89,9 @@ const CustomerManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('createdAt')
-  const [sortOrder] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
-  const [rowsPerPage] = useState(10)
-  // const [totalCount, setTotalCount] = useState(0)
+  const [rowsPerPage] = useState(20)  // ✅ Changed from 10 to 20 (backend default)
+  const [totalCount, setTotalCount] = useState(0)  // ✅ Track total customers across all pages
 
   // Dialog states
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -105,17 +104,22 @@ const CustomerManagement: React.FC = () => {
   const [actionMenuAnchor, setActionMenuAnchor] = useState<null | HTMLElement>(null)
   const [actionMenuCustomer, setActionMenuCustomer] = useState<Customer | null>(null)
 
-  // Load customers
+  // Load customers with server-side pagination
   const loadCustomers = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       
-      const response = await customerService.getCustomers()
+      // ✅ Calculate offset based on current page
+      const offset = (page - 1) * rowsPerPage
+      
+      // ✅ Fetch customers with server-side pagination
+      const response = await customerService.getCustomers(rowsPerPage, offset)
       
       if (response.success && response.data) {
-        setCustomers(response.data)
-        // setTotalCount(response.data.length)
+        setCustomers(response.data.customers)
+        setTotalCount(response.data.totalCount)  // ✅ Set total count for pagination
+        console.log(`✅ Loaded ${response.data.customers.length} customers, total: ${response.data.totalCount}`)
       } else {
         setError(response.error?.message || 'Failed to load customers')
       }
@@ -125,7 +129,7 @@ const CustomerManagement: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page, rowsPerPage])
 
   // Handle customer actions
   const handleDeleteCustomer = async () => {
@@ -135,6 +139,7 @@ const CustomerManagement: React.FC = () => {
       const response = await customerService.deleteCustomer(actionMenuCustomer.id)
       
       if (response.success) {
+        setPage(1)  // ✅ Reset to page 1 after deletion
         await loadCustomers()
         setDeleteDialogOpen(false)
         setActionMenuAnchor(null)
@@ -155,6 +160,7 @@ const CustomerManagement: React.FC = () => {
       const response = await customerService.banCustomer(actionMenuCustomer.id, actionReason)
       
       if (response.success) {
+        setPage(1)  // ✅ Reset to page 1 after action
         await loadCustomers()
         setBanDialogOpen(false)
         setActionMenuAnchor(null)
@@ -177,6 +183,7 @@ const CustomerManagement: React.FC = () => {
       const response = await customerService.updateCustomerStatus(actionMenuCustomer.id, status, actionReason)
       
       if (response.success) {
+        setPage(1)  // ✅ Reset to page 1 after action
         await loadCustomers()
         setSuspendDialogOpen(false)
         setActionMenuAnchor(null)
@@ -191,40 +198,8 @@ const CustomerManagement: React.FC = () => {
     }
   }
 
-  // Wallet adjustment method removed - no wallet system for customers
-
-  // Filter and sort customers
-  const filteredCustomers = customers
-    .filter(customer => {
-      const matchesSearch = !searchTerm || 
-        customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.phone?.includes(searchTerm)
-      
-      const matchesStatus = statusFilter === 'all' || customer.accountStatus === statusFilter
-      
-      return matchesSearch && matchesStatus
-    })
-    .sort((a, b) => {
-      let aValue = a[sortBy as keyof Customer]
-      let bValue = b[sortBy as keyof Customer]
-      
-      if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
-        aValue = a.createdAt
-        bValue = b.createdAt
-      }
-      
-      if (sortOrder === 'asc') {
-        return (aValue || 0) > (bValue || 0) ? 1 : -1
-      } else {
-        return (aValue || 0) < (bValue || 0) ? 1 : -1
-      }
-    })
-
-  // Pagination
-  const startIndex = (page - 1) * rowsPerPage
-  const endIndex = startIndex + rowsPerPage
-  const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex)
+  // ✅ Use customers directly from server-side pagination (no client-side slicing)
+  const displayCustomers = customers
 
   // Get status color
   const getStatusColor = (status?: string) => {
@@ -350,7 +325,7 @@ const CustomerManagement: React.FC = () => {
           Customer Management
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Manage customer accounts, status, and wallet balances
+          Total: {totalCount} customers · Showing page {page} of {Math.ceil(totalCount / rowsPerPage) || 1}
         </Typography>
       </Box>
 
@@ -430,7 +405,7 @@ const CustomerManagement: React.FC = () => {
           {isMobile ? (
             // Mobile Card View
             <Grid container spacing={2}>
-              {paginatedCustomers.map((customer) => (
+              {displayCustomers.map((customer) => (
                 <Grid item xs={12} key={customer.id}>
                   <Card variant="outlined" sx={{ p: 2 }}>
                     <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
@@ -517,7 +492,7 @@ const CustomerManagement: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paginatedCustomers.map((customer) => (
+                  {displayCustomers.map((customer) => (
                     <TableRow key={customer.id} hover>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -583,10 +558,10 @@ const CustomerManagement: React.FC = () => {
           )}
 
           {/* Pagination */}
-          {filteredCustomers.length > rowsPerPage && (
+          {totalCount > rowsPerPage && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
               <Pagination
-                count={Math.ceil(filteredCustomers.length / rowsPerPage)}
+                count={Math.ceil(totalCount / rowsPerPage)}
                 page={page}
                 onChange={(_, newPage) => setPage(newPage)}
                 color="primary"

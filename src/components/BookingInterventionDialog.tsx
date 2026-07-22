@@ -197,7 +197,7 @@ const BookingInterventionDialog: React.FC<BookingInterventionDialogProps> = ({
             Booking ID
           </Typography>
           <Typography variant="h6" fontWeight="600">
-            #{booking.id.substring(0, 8)}
+            #{booking.displayId ? String(booking.displayId).padStart(5, '0') : booking.id.substring(0, 8)}
           </Typography>
         </Box>
 

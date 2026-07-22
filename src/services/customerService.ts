@@ -30,17 +30,22 @@ interface Customer {
 }
 
 class CustomerService {
-  // Get all customers
-  async getCustomers(): Promise<CustomerServiceResponse<Customer[]>> {
+  // Get all customers with server-side pagination
+  async getCustomers(limit: number = 20, offset: number = 0): Promise<CustomerServiceResponse<{ customers: Customer[], totalCount: number }>> {
     try {
-      console.log('🌐 Fetching customers from backend...')
-      const response = await apiService.get('/api/admin/customers')
+      console.log(`🌐 Fetching customers from backend... (limit: ${limit}, offset: ${offset})`)
+      const response = await apiService.get(`/api/admin/customers?limit=${limit}&offset=${offset}`)
       
       if (response.success && response.data) {
-        console.log('✅ Customers fetched successfully')
+        const customers = response.data as Customer[]
+        const totalCount = (response as any).pagination?.totalCount || customers.length
+        console.log(`✅ Customers fetched successfully (${customers.length} of ${totalCount} total)`)
         return {
           success: true,
-          data: response.data as Customer[],
+          data: {
+            customers: customers,
+            totalCount: totalCount
+          },
           message: 'Customers fetched successfully'
         }
       }

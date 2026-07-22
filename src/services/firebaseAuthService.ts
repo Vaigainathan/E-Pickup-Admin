@@ -10,6 +10,7 @@ import {
 import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { customClaimsService } from './customClaimsService';
+import { API_BASE_URL } from '../config/apiConfig';
 
 export interface AdminUser {
   uid: string;
@@ -162,7 +163,7 @@ class FirebaseAuthService {
         console.log('📝 Creating admin user document in Firestore...');
         
         // Use Firebase Admin SDK via backend to create admin user document
-        const createResponse = await fetch(`${import.meta.env.VITE_API_URL || 'https://epickup-backend.onrender.com'}/api/admin/signup`, {
+        const createResponse = await fetch(`${API_BASE_URL}/api/admin/signup`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -131,6 +131,10 @@ npm run build
 
 The built files will be in the `dist` directory.
 
+Important for API URL changes:
+- Vite injects VITE_API_URL and VITE_SOCKET_URL at build time.
+- After changing .env values, you must rebuild and redeploy the dist output, otherwise the old backend URL remains in the live bundle.
+
 ## Project Structure
 
 ```

@@ -4,6 +4,7 @@
  */
 
 import { secureTokenStorage } from './secureTokenStorage';
+import { API_BASE_URL } from '../config/apiConfig';
 
 interface TrackingData {
   bookingId: string;
@@ -82,7 +83,7 @@ class LiveTrackingService {
   } = {};
 
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    this.baseUrl = API_BASE_URL;
   }
 
   /**

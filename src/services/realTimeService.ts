@@ -1,4 +1,6 @@
 import { io, Socket } from 'socket.io-client'
+import { API_BASE_URL, SOCKET_BASE_URL } from '../config/apiConfig'
+import { secureTokenStorage } from './secureTokenStorage'
 
 interface RealTimeEventHandlers {
   onDriverUpdate?: (driver: any) => void
@@ -30,10 +32,13 @@ class RealTimeService {
   private token: string | null = null
 
   constructor() {
-    // Get token from secure storage
+    // Load token once during service initialization.
+    void this.initializeToken()
+  }
+
+  private async initializeToken(): Promise<void> {
     try {
-      const { secureTokenStorage } = require('./secureTokenStorage')
-      this.token = secureTokenStorage.getToken()
+      this.token = await secureTokenStorage.getToken()
     } catch (error) {
       console.error('❌ Error getting token from secure storage:', error)
       this.token = null
@@ -41,11 +46,15 @@ class RealTimeService {
   }
 
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       if (this.socket?.connected) {
         console.log('🔌 WebSocket already connected')
         resolve()
         return
+      }
+
+      if (!this.token) {
+        this.token = await secureTokenStorage.getToken()
       }
 
       // Check if we have a valid token
@@ -55,7 +64,7 @@ class RealTimeService {
         return
       }
 
-      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://epickupbackend-production.up.railway.app'
+      const socketUrl = SOCKET_BASE_URL
       
       console.log('🔌 Connecting to WebSocket...', socketUrl)
       console.log('🔑 Token available:', this.token ? 'Yes' : 'No')
@@ -318,20 +327,21 @@ class RealTimeService {
     this.token = newToken
     
     // Update secure storage
-    try {
-      const { secureTokenStorage } = require('./secureTokenStorage')
-      const user = secureTokenStorage.getCurrentUser()
-      if (user) {
+    void secureTokenStorage
+      .getCurrentUser()
+      .then((user) => {
+        if (!user) return
+
         const expiresAt = Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-        secureTokenStorage.setTokenData({
+        return secureTokenStorage.setTokenData({
           token: newToken,
           expiresAt,
           user
         })
-      }
-    } catch (error) {
-      console.error('❌ Error updating token in secure storage:', error)
-    }
+      })
+      .catch((error) => {
+        console.error('❌ Error updating token in secure storage:', error)
+      })
     
     // Reconnect with new token
     if (this.socket) {
@@ -343,7 +353,7 @@ class RealTimeService {
   // Method to handle token refresh
   async refreshToken(): Promise<void> {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://epickupbackend-production.up.railway.app'}/api/auth/refresh`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

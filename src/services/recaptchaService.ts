@@ -3,6 +3,7 @@
  * Handles reCAPTCHA v3 token generation and verification
  * Updated for Firebase v12+ and latest reCAPTCHA best practices
  */
+import { API_BASE_URL } from '../config/apiConfig';
 
 // Extend Window interface for reCAPTCHA v3
 declare global {
@@ -90,7 +91,7 @@ class RecaptchaService {
     try {
       console.log('🔍 [RECAPTCHA] Verifying token on backend...');
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://epickup-backend.onrender.com'}/api/auth/verify-recaptcha`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify-recaptcha`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

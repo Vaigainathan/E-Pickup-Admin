@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client'
+import { SOCKET_BASE_URL } from '../config/apiConfig'
 // import { WebSocketEvent } from '../types' // Removed unused import
 
 class WebSocketService {
@@ -19,7 +20,7 @@ class WebSocketService {
       // Don't validate token expiration here - let the server handle it
       // This prevents connection failures due to client-side validation errors
 
-      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000'
+      const socketUrl = SOCKET_BASE_URL
       
       this.socket = io(socketUrl, {
         auth: { token },

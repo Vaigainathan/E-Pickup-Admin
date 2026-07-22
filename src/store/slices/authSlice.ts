@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { User, AuthState } from '../../types'
 import { firebaseAuthService, AdminUser } from '../../services/firebaseAuthService'
 import { secureTokenStorage } from '../../services/secureTokenStorage'
+import { API_BASE_URL } from '../../config/apiConfig'
 
 const initialState: AuthState = {
   isAuthenticated: false, // Will be set after async check
@@ -70,7 +71,7 @@ export const loginAdmin = createAsyncThunk(
       }
 
       // Send ID token to backend for verification and JWT generation
-      const backendResponse = await fetch(`${import.meta.env.VITE_API_URL || 'https://epickup-backend.onrender.com'}/api/admin/auth/login`, {
+      const backendResponse = await fetch(`${API_BASE_URL}/api/admin/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,11 +1,6 @@
 import { ApiResponse } from '../types'
 import { secureTokenStorage } from './secureTokenStorage'
-
-const API_BASE_URL = import.meta.env.VITE_API_URL
-
-if (!API_BASE_URL) {
-  throw new Error('VITE_API_URL environment variable is required')
-}
+import { API_BASE_URL } from '../config/apiConfig'
 
 class ApiService {
   private baseURL: string

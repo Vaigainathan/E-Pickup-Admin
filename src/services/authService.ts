@@ -1,6 +1,7 @@
 import { apiService } from './apiService'
 import { secureTokenStorage } from './secureTokenStorage'
 import { User } from '../types'
+import { API_BASE_URL } from '../config/apiConfig'
 
 interface LoginCredentials {
   email: string
@@ -40,7 +41,7 @@ class AuthService {
         console.log('🔄 [ADMIN] Exchanging Firebase token for backend JWT...')
         
         // Exchange Firebase ID token for backend JWT token (simplified)
-        const exchangeResponse = await fetch(`${import.meta.env.VITE_API_URL || 'https://epickup-backend.onrender.com'}/api/auth/firebase/verify-token`, {
+        const exchangeResponse = await fetch(`${API_BASE_URL}/api/auth/firebase/verify-token`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

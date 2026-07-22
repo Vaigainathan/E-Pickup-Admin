@@ -1174,7 +1174,7 @@ class ComprehensiveAdminService {
       const response = await apiService.get('/api/admin/customers')
       
       if (response.success && response.data) {
-        console.log('✅ Customers fetched successfully')
+        console.log(`✅ Customers fetched successfully - ${(response.data as Customer[])?.length || 0} customers`)
         return {
           success: true,
           data: (response.data as Customer[]) || [],
@@ -1285,11 +1285,14 @@ class ComprehensiveAdminService {
 
   private async getCustomersFromFirestore(): Promise<AdminServiceResponse<Customer[]>> {
     try {
+      // ✅ CRITICAL FIX: Remove limit to fetch ALL customers instead of just first 100
+      // This ensures accurate customer counts across the dashboard
+      // Note: This should ideally be paginated for large datasets, but for now we fetch all
       const customersQuery = query(
         collection(db, 'users'),
         where('userType', '==', 'customer'),
-        orderBy('createdAt', 'desc'),
-        limit(100)
+        orderBy('createdAt', 'desc')
+        // ✅ REMOVED: limit(100) - was causing customer count to be capped at 100
       )
       const customersSnapshot = await getDocs(customersQuery)
       
@@ -1319,7 +1322,7 @@ class ComprehensiveAdminService {
         })
       })
       
-      console.log('✅ Customers fetched from Firestore successfully')
+      console.log(`✅ Customers fetched from Firestore successfully - ${customers.length} total customers`)
       return {
         success: true,
         data: customers,

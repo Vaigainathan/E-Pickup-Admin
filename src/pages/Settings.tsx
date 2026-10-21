@@ -17,10 +17,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
   useMediaQuery,
   Table,
   TableBody,
@@ -38,7 +34,6 @@ import {
   MenuItem,
 } from '@mui/material'
 import {
-  Save as SaveIcon,
   Refresh as RefreshIcon,
   // Security as SecurityIcon, // Removed unused import
   // Notifications as NotificationsIcon, // Removed unused import
@@ -54,7 +49,6 @@ import {
 import { useSelector } from 'react-redux'
 import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
-import { updateProfile, changePassword } from '../store/slices/authSlice'
 import { 
   fetchSettings, 
   updateSettings, 
@@ -73,18 +67,6 @@ const Settings: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth)
   const { settings, loading, backups, backupsLoading } = useSelector((state: RootState) => state.settings)
   
-  const [profileData, setProfileData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-  })
-  
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  })
-  
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false)
   const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null)
   const [cacheDialogOpen, setCacheDialogOpen] = useState(false)
@@ -97,39 +79,6 @@ const Settings: React.FC = () => {
     dispatch(fetchSettings())
     dispatch(fetchBackups())
   }, [dispatch])
-
-  const handleProfileUpdate = async () => {
-    try {
-      await dispatch(updateProfile(profileData)).unwrap()
-      setSuccessMessage('Profile updated successfully!')
-      setTimeout(() => setSuccessMessage(''), 3000)
-    } catch (error) {
-      setErrorMessage('Failed to update profile')
-      setTimeout(() => setErrorMessage(''), 3000)
-    }
-  }
-
-  const handlePasswordChange = async () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setErrorMessage('New passwords do not match')
-      setTimeout(() => setErrorMessage(''), 3000)
-      return
-    }
-
-    try {
-      await dispatch(changePassword({
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword,
-      })).unwrap()
-      setPasswordDialogOpen(false)
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
-      setSuccessMessage('Password changed successfully!')
-      setTimeout(() => setSuccessMessage(''), 3000)
-    } catch (error) {
-      setErrorMessage('Failed to change password')
-      setTimeout(() => setErrorMessage(''), 3000)
-    }
-  }
 
   const handleSettingChange = async (setting: string, value: boolean | string) => {
     try {
@@ -272,26 +221,20 @@ const Settings: React.FC = () => {
               <TextField
                 fullWidth
                 label="Full Name"
-                value={profileData.name}
-                onChange={(e) => setProfileData(prev => ({ ...prev, name: e.target.value }))}
+                value={user?.name || ''}
                 margin="normal"
+                disabled
               />
               <TextField
                 fullWidth
                 label="Email Address"
-                value={profileData.email}
-                onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
+                value={user?.email || ''}
                 margin="normal"
                 disabled
               />
-              <Button
-                variant="contained"
-                startIcon={<SaveIcon />}
-                onClick={handleProfileUpdate}
-                sx={{ mt: 2 }}
-              >
-                Update Profile
-              </Button>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Profile updates are managed by the backend admin API and are not editable here.
+              </Alert>
             </CardContent>
           </Card>
         </Grid>
@@ -303,44 +246,9 @@ const Settings: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Security
               </Typography>
-              <List>
-                <ListItem>
-                  <ListItemText
-                    primary="Change Password"
-                    secondary="Update your account password"
-                  />
-                  <ListItemSecondaryAction>
-                    <Button
-                      variant="outlined"
-                      onClick={() => setPasswordDialogOpen(true)}
-                    >
-                      Change
-                    </Button>
-                  </ListItemSecondaryAction>
-                </ListItem>
-                <ListItem>
-                  <ListItemText
-                    primary="Two-Factor Authentication"
-                    secondary="Add an extra layer of security"
-                  />
-                  <ListItemSecondaryAction>
-                    <Button variant="outlined" disabled>
-                      Enable
-                    </Button>
-                  </ListItemSecondaryAction>
-                </ListItem>
-                <ListItem>
-                  <ListItemText
-                    primary="Login Sessions"
-                    secondary="Manage active sessions"
-                  />
-                  <ListItemSecondaryAction>
-                    <Button variant="outlined">
-                      Manage
-                    </Button>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              </List>
+              <Alert severity="info">
+                Security options such as two-factor authentication and session management are not available in the admin API yet.
+              </Alert>
             </CardContent>
           </Card>
         </Grid>
@@ -355,7 +263,7 @@ const Settings: React.FC = () => {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={settings.notifications}
+                    checked={settings?.notifications ?? false}
                     onChange={(e) => handleSettingChange('notifications', e.target.checked)}
                   />
                 }
@@ -364,7 +272,7 @@ const Settings: React.FC = () => {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={settings.emailAlerts}
+                    checked={settings?.emailAlerts ?? false}
                     onChange={(e) => handleSettingChange('emailAlerts', e.target.checked)}
                   />
                 }
@@ -373,7 +281,7 @@ const Settings: React.FC = () => {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={settings.emergencyAlerts}
+                    checked={settings?.emergencyAlerts ?? false}
                     onChange={(e) => handleSettingChange('emergencyAlerts', e.target.checked)}
                   />
                 }
@@ -382,7 +290,7 @@ const Settings: React.FC = () => {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={settings.systemAlerts}
+                    checked={settings?.systemAlerts ?? false}
                     onChange={(e) => handleSettingChange('systemAlerts', e.target.checked)}
                   />
                 }
@@ -402,7 +310,7 @@ const Settings: React.FC = () => {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={settings.darkMode}
+                    checked={settings?.darkMode ?? false}
                     onChange={(e) => handleSettingChange('darkMode', e.target.checked)}
                   />
                 }
@@ -412,7 +320,7 @@ const Settings: React.FC = () => {
                 fullWidth
                 select
                 label="Language"
-                value={settings.language}
+                value={settings?.language ?? 'en'}
                 onChange={(e) => handleSettingChange('language', e.target.value)}
                 margin="normal"
                 SelectProps={{
@@ -428,7 +336,7 @@ const Settings: React.FC = () => {
                 fullWidth
                 select
                 label="Timezone"
-                value={settings.timezone}
+                value={settings?.timezone ?? 'UTC'}
                 onChange={(e) => handleSettingChange('timezone', e.target.value)}
                 margin="normal"
                 SelectProps={{
@@ -469,7 +377,7 @@ const Settings: React.FC = () => {
                   <Box display="flex" justifyContent="center" p={3}>
                     <CircularProgress />
                   </Box>
-                ) : backups.length === 0 ? (
+                ) : !Array.isArray(backups) || backups.length === 0 ? (
                   <Alert severity="info">
                     No backups found. Create your first backup to get started.
                   </Alert>
@@ -700,49 +608,6 @@ const Settings: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Change Password Dialog */}
-      <Dialog open={passwordDialogOpen} onClose={() => setPasswordDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
-        <DialogTitle>Change Password</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            label="Current Password"
-            type="password"
-            value={passwordData.currentPassword}
-            onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
-            margin="normal"
-            required
-          />
-          <TextField
-            fullWidth
-            label="New Password"
-            type="password"
-            value={passwordData.newPassword}
-            onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-            margin="normal"
-            required
-          />
-          <TextField
-            fullWidth
-            label="Confirm New Password"
-            type="password"
-            value={passwordData.confirmPassword}
-            onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-            margin="normal"
-            required
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPasswordDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handlePasswordChange}
-            variant="contained"
-            disabled={!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
-          >
-            Change Password
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

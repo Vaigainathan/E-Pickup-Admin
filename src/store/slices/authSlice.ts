@@ -1,18 +1,38 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { User, AuthState } from '../../types'
-import { firebaseAuthService, AdminUser } from '../../services/firebaseAuthService'
+import { firebaseAuthService } from '../../services/firebaseAuthService'
 import { secureTokenStorage } from '../../services/secureTokenStorage'
 import { API_BASE_URL } from '../../config/apiConfig'
+import { mapError } from '../../services/errorHandlerService'
 
 const initialState: AuthState = {
-  isAuthenticated: false, // Will be set after async check
-  user: null, // Will be set after async check
-  token: null, // Will be set after async check
-  loading: false, // Start with false, will be set to true during initialization
+  isAuthenticated: false,
+  user: null,
+  token: null,
+  loading: false,
   error: null,
 }
 
-// Async thunks
+function buildUserFromBackend(firebaseUid: string, email: string | null, backendUser: any, token: string): User {
+  const role = backendUser?.role === 'super_admin' || backendUser?.role === 'support'
+    ? backendUser.role
+    : 'support'
+  const displayName = backendUser?.displayName || backendUser?.name || 'Admin User'
+  return {
+    uid: backendUser?.uid || firebaseUid,
+    id: backendUser?.uid || firebaseUid,
+    email: backendUser?.email ?? email,
+    name: displayName,
+    displayName,
+    role,
+    isActive: backendUser?.isActive !== false,
+    idToken: token,
+    refreshToken: token,
+    lastLogin: new Date().toISOString(),
+    createdAt: backendUser?.createdAt || new Date().toISOString(),
+  }
+}
+
 export const initializeAuth = createAsyncThunk(
   'auth/initialize',
   async (_, { rejectWithValue }) => {
@@ -20,10 +40,71 @@ export const initializeAuth = createAsyncThunk(
       const isAuthenticated = await secureTokenStorage.isAuthenticated()
       const user = await secureTokenStorage.getCurrentUser()
       const token = await secureTokenStorage.getToken()
-      
       return { isAuthenticated, user, token }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
+    }
+  }
+)
+
+export const verifyAdminSession = createAsyncThunk(
+  'auth/verifySession',
+  async (_, { rejectWithValue, dispatch }) => {
+    try {
+      const token = await secureTokenStorage.getToken()
+      if (!token) {
+        return rejectWithValue(mapError({ code: 'UNAUTHORIZED' }))
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/auth/verify-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const err = { code: errorData.error?.code, status: response.status, response: { data: errorData } }
+        if (response.status === 401) {
+          dispatch(logout())
+        }
+        return rejectWithValue(mapError(err))
+      }
+
+      const data = await response.json()
+      const backendUser = data.data?.user
+      if (backendUser?.isActive === false) {
+        await firebaseAuthService.signOut()
+        dispatch(logout())
+        return rejectWithValue(mapError({ code: 'ACCOUNT_DISABLED' }))
+      }
+
+      const existing = await secureTokenStorage.getCurrentUser()
+      const newToken = data.data?.token || token
+      const standardizedUser = buildUserFromBackend(
+        existing?.uid || backendUser?.uid,
+        existing?.email ?? backendUser?.email,
+        backendUser,
+        newToken
+      )
+
+      const expiresAt = Date.now() + 24 * 60 * 60 * 1000
+      await secureTokenStorage.setTokenData({
+        token: newToken,
+        expiresAt,
+        user: standardizedUser,
+        isBackendToken: true,
+      })
+
+      const { apiService } = await import('../../services/apiService')
+      await apiService.setToken(newToken, true)
+
+      return { user: standardizedUser, token: newToken }
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
     }
   }
 )
@@ -32,83 +113,56 @@ export const loginAdmin = createAsyncThunk(
   'auth/login',
   async (credentials: { email: string; password: string }, { rejectWithValue }) => {
     try {
-      // First authenticate with Firebase
       const response = await firebaseAuthService.signIn(credentials)
       if (!response.success || !response.user) {
-        return rejectWithValue(response.error || 'Login failed')
+        return rejectWithValue(response.error || mapError({ code: 'AUTHENTICATION_FAILED' }))
       }
 
-      // Get Firebase ID token
-      const idToken = await firebaseAuthService.getIdToken()
-      if (!idToken) {
-        return rejectWithValue('Failed to get Firebase ID token')
+      let finalToken = await firebaseAuthService.getIdToken()
+      if (!finalToken) {
+        return rejectWithValue(mapError({ code: 'AUTHENTICATION_FAILED' }))
       }
 
-      // Simplified token validation - let backend handle detailed validation
-      // This prevents client-side validation errors from breaking the login flow
-      let finalToken = idToken
-      
       try {
-        // Basic token format check only
-        if (!idToken || typeof idToken !== 'string' || idToken.length < 10) {
-          return rejectWithValue('Invalid token provided')
-        }
-        
-        // Try to refresh token if it might be expired (but don't fail if it's not)
-        try {
-          const refreshedToken = await firebaseAuthService.getIdToken(true)
-          if (refreshedToken && refreshedToken !== idToken) {
-            console.log('🔄 Token refreshed, using new token')
-            finalToken = refreshedToken
-          }
-        } catch (refreshError) {
-          console.log('⚠️ Token refresh failed, using original token:', refreshError)
-          // Continue with original token - let backend handle validation
-        }
-      } catch (tokenError) {
-        console.error('Token validation error:', tokenError)
-        return rejectWithValue('Token validation failed')
+        const refreshedToken = await firebaseAuthService.getIdToken(true)
+        if (refreshedToken) finalToken = refreshedToken
+      } catch {
+        // use existing token
       }
 
-      // Send ID token to backend for verification and JWT generation
       const backendResponse = await fetch(`${API_BASE_URL}/api/admin/auth/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ idToken: finalToken })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: finalToken }),
       })
 
       if (!backendResponse.ok) {
-        const errorData = await backendResponse.json()
-        return rejectWithValue(errorData.error?.message || 'Backend authentication failed')
+        const errorData = await backendResponse.json().catch(() => ({}))
+        const err = { code: errorData.error?.code, status: backendResponse.status, response: { data: errorData } }
+        await firebaseAuthService.signOut()
+        return rejectWithValue(mapError(err))
       }
 
       const backendData = await backendResponse.json()
-      
-      return { 
-        user: response.user, 
-        token: backendData.data.token,
-        backendUser: backendData.data.user
+      const backendUser = backendData.data?.user
+      if (backendUser?.isActive === false) {
+        await firebaseAuthService.signOut()
+        return rejectWithValue(mapError({ code: 'ACCOUNT_DISABLED' }))
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
 
-export const signupAdmin = createAsyncThunk(
-  'auth/signup',
-  async (signupData: { email: string; password: string; displayName: string; role: AdminUser['role'] }, { rejectWithValue }) => {
-    try {
-      const response = await firebaseAuthService.signUp(signupData)
-      if (response.success && response.user) {
-        return { user: response.user, token: await firebaseAuthService.getIdToken() }
-      } else {
-        return rejectWithValue(response.error || 'Signup failed')
+      const jwt = backendData.data?.token
+      if (!jwt) {
+        return rejectWithValue(mapError({ code: 'AUTHENTICATION_FAILED' }))
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
+
+      return {
+        firebaseUid: response.user.uid,
+        email: response.user.email,
+        token: jwt,
+        backendUser,
+      }
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
     }
   }
 )
@@ -119,12 +173,11 @@ export const resetPassword = createAsyncThunk(
     try {
       const response = await firebaseAuthService.resetPassword(email)
       if (response.success) {
-        return { message: 'Password reset email sent successfully' }
-      } else {
-        return rejectWithValue(response.error || 'Password reset failed')
+        return { message: response.message }
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
+      return rejectWithValue(mapError({ code: 'UNKNOWN_ERROR' }))
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
     }
   }
 )
@@ -134,13 +187,10 @@ export const getProfile = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const user = firebaseAuthService.getCurrentUser()
-      if (user) {
-        return user
-      } else {
-        return rejectWithValue('No user found')
-      }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
+      if (user) return user
+      return rejectWithValue(mapError({ code: 'UNAUTHORIZED' }))
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
     }
   }
 )
@@ -153,11 +203,10 @@ export const refreshToken = createAsyncThunk(
       if (token) {
         await secureTokenStorage.updateToken(token)
         return { token }
-      } else {
-        return rejectWithValue('Failed to refresh token')
       }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
+      return rejectWithValue(mapError({ code: 'TOKEN_EXPIRED' }))
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
     }
   }
 )
@@ -168,8 +217,8 @@ export const logoutAdmin = createAsyncThunk(
     try {
       await firebaseAuthService.signOut()
       return {}
-    } catch (error: any) {
-      return rejectWithValue(error.message)
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
     }
   }
 )
@@ -184,6 +233,7 @@ const authSlice = createSlice({
       state.token = null
       state.error = null
       secureTokenStorage.clearTokenData()
+      import('../../services/apiService').then(({ apiService }) => apiService.clearToken())
     },
     clearError: (state) => {
       state.error = null
@@ -194,8 +244,6 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Login
-      // Initialize auth state
       .addCase(initializeAuth.pending, (state) => {
         state.loading = true
         state.error = null
@@ -214,7 +262,17 @@ const authSlice = createSlice({
         state.token = null
         state.error = action.payload as string
       })
-      // Login
+      .addCase(verifyAdminSession.fulfilled, (state, action) => {
+        state.isAuthenticated = true
+        state.user = action.payload.user
+        state.token = action.payload.token
+        state.loading = false
+        state.error = null
+      })
+      .addCase(verifyAdminSession.rejected, (state, action) => {
+        state.loading = false
+        if (action.payload) state.error = action.payload as string
+      })
       .addCase(loginAdmin.pending, (state) => {
         state.loading = true
         state.error = null
@@ -222,71 +280,32 @@ const authSlice = createSlice({
       .addCase(loginAdmin.fulfilled, (state, action) => {
         state.loading = false
         state.isAuthenticated = true
-        
-        // Standardize user object structure
-        const standardizedUser: User = {
-          uid: action.payload.user.uid,
-          id: action.payload.user.uid,
-          email: action.payload.user.email,
-          name: action.payload.user.displayName || action.payload.user.name,
-          displayName: action.payload.user.displayName || action.payload.user.name,
-          role: action.payload.user.role,
-          idToken: action.payload.token,
-          refreshToken: action.payload.token,
-          lastLogin: new Date().toISOString(),
-          createdAt: action.payload.user.createdAt || new Date().toISOString()
-        }
-        
+        const standardizedUser = buildUserFromBackend(
+          action.payload.firebaseUid,
+          action.payload.email,
+          action.payload.backendUser,
+          action.payload.token
+        )
         state.user = standardizedUser
         state.token = action.payload.token
         state.error = null
-        
-        // Store in secure storage
-        const expiresAt = Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+
+        const expiresAt = Date.now() + 24 * 60 * 60 * 1000
         secureTokenStorage.setTokenData({
           token: action.payload.token,
           expiresAt,
-          user: standardizedUser
+          user: standardizedUser,
+          isBackendToken: true,
         })
-        
-        // IMPORTANT: Set the backend JWT token in apiService
+
         import('../../services/apiService').then(({ apiService }) => {
           apiService.setToken(action.payload.token, true)
-          console.log('✅ [AUTH] Backend JWT token set in apiService')
         })
       })
       .addCase(loginAdmin.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload as string
       })
-      // Signup
-      .addCase(signupAdmin.pending, (state) => {
-        state.loading = true
-        state.error = null
-      })
-      .addCase(signupAdmin.fulfilled, (state, action) => {
-        state.loading = false
-        state.isAuthenticated = true
-        state.user = {
-          uid: action.payload.user.uid,
-          id: action.payload.user.uid,
-          email: action.payload.user.email,
-          name: action.payload.user.displayName,
-          displayName: action.payload.user.displayName,
-          role: action.payload.user.role,
-          idToken: action.payload.user.idToken,
-          refreshToken: action.payload.user.refreshToken,
-          lastLogin: new Date().toISOString(),
-          createdAt: action.payload.user.createdAt
-        } as User
-        state.token = action.payload.token
-        state.error = null
-      })
-      .addCase(signupAdmin.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload as string
-      })
-      // Reset Password
       .addCase(resetPassword.pending, (state) => {
         state.loading = true
         state.error = null
@@ -299,7 +318,6 @@ const authSlice = createSlice({
         state.loading = false
         state.error = action.payload as string
       })
-      // Logout
       .addCase(logoutAdmin.pending, (state) => {
         state.loading = true
       })
@@ -314,7 +332,6 @@ const authSlice = createSlice({
         state.loading = false
         state.error = action.payload as string
       })
-      // Get Profile
       .addCase(getProfile.pending, (state) => {
         state.loading = true
         state.error = null
@@ -331,7 +348,7 @@ const authSlice = createSlice({
           idToken: action.payload.idToken,
           refreshToken: action.payload.refreshToken,
           lastLogin: new Date().toISOString(),
-          createdAt: action.payload.createdAt
+          createdAt: action.payload.createdAt,
         } as User
         state.isAuthenticated = true
         state.error = null
@@ -343,13 +360,9 @@ const authSlice = createSlice({
         state.token = null
         secureTokenStorage.clearTokenData()
       })
-      // Refresh Token
       .addCase(refreshToken.fulfilled, (state, action) => {
         state.token = action.payload.token
-        // Keep existing user data when refreshing token
-        if (state.user) {
-          state.user.idToken = action.payload.token
-        }
+        if (state.user) state.user.idToken = action.payload.token
         state.isAuthenticated = true
       })
       .addCase(refreshToken.rejected, (state) => {
@@ -362,35 +375,5 @@ const authSlice = createSlice({
 })
 
 export const { logout, clearError, setAuthenticated } = authSlice.actions
-
-// Additional actions for profile management
-export const updateProfile = createAsyncThunk(
-  'auth/updateProfile',
-  async (profileData: { name?: string; email?: string; phone?: string }, { rejectWithValue }) => {
-    try {
-      // This would call an API to update profile
-      return profileData
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const changePassword = createAsyncThunk(
-  'auth/changePassword',
-  async (passwordData: { currentPassword: string; newPassword: string }, { rejectWithValue }) => {
-    try {
-      // This would call an API to change password
-      // For now, simulate API call
-      if (passwordData.currentPassword && passwordData.newPassword) {
-        return { message: 'Password changed successfully' }
-      } else {
-        throw new Error('Invalid password data')
-      }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
 
 export default authSlice.reducer

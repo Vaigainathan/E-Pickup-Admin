@@ -4,11 +4,10 @@ import { useSelector } from 'react-redux'
 import { RootState } from './store/index'
 import Layout from './layouts/Layout'
 import Login from './pages/Login'
-import Signup from './pages/Signup'
 import ErrorBoundary from './components/ErrorBoundary'
+import SuperAdminRoute from './components/SuperAdminRoute'
 import { Box, CircularProgress } from '@mui/material'
 
-// Lazy load all pages for better performance
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const DriverManagement = lazy(() => import('./pages/DriverManagement'))
 const CustomerManagement = lazy(() => import('./pages/CustomerManagement'))
@@ -22,31 +21,20 @@ const Analytics = lazy(() => import('./pages/Analytics'))
 const Settings = lazy(() => import('./pages/Settings'))
 const AdminManagement = lazy(() => import('./pages/AdminManagement'))
 
-// Loading component
 const PageLoader = () => (
-  <Box 
-    display="flex" 
-    justifyContent="center" 
-    alignItems="center" 
-    minHeight="200px"
-  >
+  <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
     <CircularProgress />
   </Box>
 )
 
 function App() {
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
-  const token = useSelector((state: RootState) => state.auth.token)
-
-  // Debug logging
-  console.log('App render - isAuthenticated:', isAuthenticated, 'hasToken:', !!token)
 
   if (!isAuthenticated) {
     return (
       <ErrorBoundary>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </ErrorBoundary>
@@ -55,7 +43,6 @@ function App() {
 
   return (
     <ErrorBoundary>
-      {/* Skip link for accessibility */}
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
@@ -72,9 +59,30 @@ function App() {
             <Route path="/support" element={<ErrorBoundary><SupportTickets /></ErrorBoundary>} />
             <Route path="/live-tracking" element={<ErrorBoundary><LiveTracking /></ErrorBoundary>} />
             <Route path="/monitoring" element={<ErrorBoundary><SystemMonitoring /></ErrorBoundary>} />
-            <Route path="/analytics" element={<ErrorBoundary><Analytics /></ErrorBoundary>} />
-            <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
-            <Route path="/admin-management" element={<ErrorBoundary><AdminManagement /></ErrorBoundary>} />
+            <Route
+              path="/analytics"
+              element={
+                <SuperAdminRoute>
+                  <ErrorBoundary><Analytics /></ErrorBoundary>
+                </SuperAdminRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <SuperAdminRoute>
+                  <ErrorBoundary><Settings /></ErrorBoundary>
+                </SuperAdminRoute>
+              }
+            />
+            <Route
+              path="/admin-management"
+              element={
+                <SuperAdminRoute>
+                  <ErrorBoundary><AdminManagement /></ErrorBoundary>
+                </SuperAdminRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>

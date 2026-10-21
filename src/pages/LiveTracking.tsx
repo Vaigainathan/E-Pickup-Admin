@@ -117,7 +117,12 @@ const LiveTracking: React.FC = () => {
       const driversData = await liveTrackingService.getOnlineDrivers();
 
       if (trackingData.success && trackingData.data) {
-        const transformedBookings = trackingData.data.map(transformBookingData);
+        const bookingList = Array.isArray(trackingData.data)
+          ? trackingData.data
+          : Array.isArray((trackingData.data as any)?.bookings)
+            ? (trackingData.data as any).bookings
+            : [];
+        const transformedBookings = bookingList.map(transformBookingData);
         setBookings(transformedBookings);
       } else {
         console.warn('Failed to load bookings:', trackingData.error);
@@ -126,7 +131,12 @@ const LiveTracking: React.FC = () => {
       }
 
       if (driversData.success && driversData.data) {
-        const transformedDrivers = driversData.data.map(transformDriverData);
+        const driverList = Array.isArray(driversData.data)
+          ? driversData.data
+          : Array.isArray((driversData.data as any)?.drivers)
+            ? (driversData.data as any).drivers
+            : [];
+        const transformedDrivers = driverList.map(transformDriverData);
         setDrivers(transformedDrivers);
       } else {
         console.warn('Failed to load drivers:', driversData.error);

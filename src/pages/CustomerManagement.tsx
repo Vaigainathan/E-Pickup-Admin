@@ -41,7 +41,6 @@ import {
   Search as SearchIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
-  Delete as DeleteIcon,
   Block as BlockIcon,
   Pending as PendingIcon,
   Info as InfoIcon,
@@ -94,7 +93,6 @@ const CustomerManagement: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0)  // ✅ Track total customers across all pages
 
   // Dialog states
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [banDialogOpen, setBanDialogOpen] = useState(false)
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false)
   // Wallet-related state removed - no wallet system for customers
@@ -117,9 +115,10 @@ const CustomerManagement: React.FC = () => {
       const response = await customerService.getCustomers(rowsPerPage, offset)
       
       if (response.success && response.data) {
-        setCustomers(response.data.customers)
-        setTotalCount(response.data.totalCount)  // ✅ Set total count for pagination
-        console.log(`✅ Loaded ${response.data.customers.length} customers, total: ${response.data.totalCount}`)
+        const customerList = Array.isArray(response.data.customers) ? response.data.customers : []
+        setCustomers(customerList)
+        setTotalCount(response.data.totalCount ?? customerList.length)
+        console.log(`✅ Loaded ${customerList.length} customers, total: ${response.data.totalCount ?? customerList.length}`)
       } else {
         setError(response.error?.message || 'Failed to load customers')
       }
@@ -130,28 +129,6 @@ const CustomerManagement: React.FC = () => {
       setLoading(false)
     }
   }, [page, rowsPerPage])
-
-  // Handle customer actions
-  const handleDeleteCustomer = async () => {
-    if (!actionMenuCustomer) return
-
-    try {
-      const response = await customerService.deleteCustomer(actionMenuCustomer.id)
-      
-      if (response.success) {
-        setPage(1)  // ✅ Reset to page 1 after deletion
-        await loadCustomers()
-        setDeleteDialogOpen(false)
-        setActionMenuAnchor(null)
-        setActionMenuCustomer(null)
-      } else {
-        setError(response.error?.message || 'Failed to delete customer')
-      }
-    } catch (err) {
-      setError('Failed to delete customer')
-      console.error('Error deleting customer:', err)
-    }
-  }
 
   const handleBanCustomer = async () => {
     if (!actionMenuCustomer) return
@@ -618,38 +595,7 @@ const CustomerManagement: React.FC = () => {
           </ListItemIcon>
           <ListItemText>Ban Customer</ListItemText>
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            setDeleteDialogOpen(true)
-            setActionMenuAnchor(null)
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <ListItemIcon>
-            <DeleteIcon />
-          </ListItemIcon>
-          <ListItemText>Delete Customer</ListItemText>
-        </MenuItem>
       </Menu>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} fullScreen={isMobileDialog}>
-        <DialogTitle>Delete Customer</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to permanently delete this customer? This action cannot be undone.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Customer: {actionMenuCustomer?.name || actionMenuCustomer?.personalInfo?.name}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteCustomer} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Ban Confirmation Dialog */}
       <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)} fullScreen={isMobileDialog}>

@@ -69,42 +69,6 @@ export const fetchActiveAlerts = createAsyncThunk(
   }
 )
 
-export const fetchAlertById = createAsyncThunk(
-  'emergency/fetchAlertById',
-  async (alertId: string, { rejectWithValue }) => {
-    try {
-      const response = await emergencyService.getAlertById(alertId)
-      return response
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const respondToEmergency = createAsyncThunk(
-  'emergency/respondToEmergency',
-  async (data: { alertId: string; response: any }, { rejectWithValue }) => {
-    try {
-      const response = await emergencyService.respondToEmergency(data.alertId, data.response)
-      return { alertId: data.alertId, ...response }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const updateAlertStatus = createAsyncThunk(
-  'emergency/updateAlertStatus',
-  async (data: { alertId: string; status: string }, { rejectWithValue }) => {
-    try {
-      const response = await emergencyService.updateAlertStatus(data.alertId, data.status)
-      return { alertId: data.alertId, ...response }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
 export const fetchEmergencyStats = createAsyncThunk(
   'emergency/fetchStats',
   async (_, { rejectWithValue }) => {
@@ -179,42 +143,6 @@ const emergencySlice = createSlice({
       // Fetch Active Alerts
       .addCase(fetchActiveAlerts.fulfilled, (state, action) => {
         state.activeAlerts = action.payload
-      })
-      // Fetch Alert by ID
-      .addCase(fetchAlertById.pending, (state) => {
-        state.loading = true
-        state.error = null
-      })
-      .addCase(fetchAlertById.fulfilled, (state, action) => {
-        state.loading = false
-        state.selectedAlert = action.payload
-        state.error = null
-      })
-      .addCase(fetchAlertById.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload as string
-      })
-      // Respond to Emergency
-      .addCase(respondToEmergency.fulfilled, (state, action) => {
-        const index = state.alerts.findIndex(alert => alert.id === action.payload.alertId)
-        if (index !== -1 && state.alerts[index]) {
-          state.alerts[index]!.response = (action.payload as any).response
-          state.alerts[index]!.status = 'responded'
-        }
-        if (state.selectedAlert?.id === action.payload.alertId) {
-          state.selectedAlert.response = (action.payload as any).response
-          state.selectedAlert.status = 'responded'
-        }
-      })
-      // Update Alert Status
-      .addCase(updateAlertStatus.fulfilled, (state, action) => {
-        const index = state.alerts.findIndex(alert => alert.id === action.payload.alertId)
-        if (index !== -1 && state.alerts[index]) {
-          state.alerts[index]!.status = action.payload.status as any
-        }
-        if (state.selectedAlert?.id === action.payload.alertId) {
-          state.selectedAlert.status = action.payload.status as any
-        }
       })
       // Fetch Emergency Stats
       .addCase(fetchEmergencyStats.fulfilled, (state, action) => {

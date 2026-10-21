@@ -49,6 +49,27 @@ class ErrorHandlerService {
       retryable: false,
       action: 'Contact system administrator'
     },
+    'INSUFFICIENT_ADMIN_ROLE': {
+      code: 'INSUFFICIENT_ADMIN_ROLE',
+      message: "You don't have access to perform this action.",
+      severity: 'error',
+      retryable: false,
+      action: 'Contact a super admin if you need access'
+    },
+    'ADMIN_SIGNUP_DISABLED': {
+      code: 'ADMIN_SIGNUP_DISABLED',
+      message: 'Admin self-registration is not available.',
+      severity: 'error',
+      retryable: false,
+      action: 'Contact a super admin to create your account'
+    },
+    'ACCOUNT_DISABLED': {
+      code: 'ACCOUNT_DISABLED',
+      message: 'This admin account has been disabled.',
+      severity: 'error',
+      retryable: false,
+      action: 'Contact a super admin'
+    },
 
     // Network errors
     'NETWORK_ERROR': {
@@ -180,11 +201,12 @@ class ErrorHandlerService {
       const errorCode = apiError.code || 'UNKNOWN_ERROR';
       
       if (this.errorMessages[errorCode]) {
-        return {
-          ...this.errorMessages[errorCode]!,
-          details: apiError.details || apiError.message
-        };
+        return { ...this.errorMessages[errorCode]! };
       }
+    }
+
+    if (error?.code && this.errorMessages[error.code]) {
+      return { ...this.errorMessages[error.code]! };
     }
 
     // Firebase Auth errors
@@ -192,11 +214,12 @@ class ErrorHandlerService {
       return this.handleFirebaseError(error);
     }
 
-    // Generic error
-    return {
-      ...this.errorMessages.UNKNOWN_ERROR!,
-      details: error.message || 'No additional details available'
-    };
+    if (typeof error === 'string') {
+      const known = this.errorMessages[error];
+      if (known) return { ...known };
+    }
+
+    return { ...this.errorMessages.UNKNOWN_ERROR! };
   }
 
   /**
@@ -320,4 +343,14 @@ class ErrorHandlerService {
 }
 
 export const errorHandlerService = new ErrorHandlerService();
+
+/** User-facing message only — never exposes raw server/Firebase text */
+export function mapError(error: unknown): string {
+  return errorHandlerService.handleError(error).message;
+}
+
+export function mapErrorCode(error: unknown): string {
+  return errorHandlerService.handleError(error).code;
+}
+
 export default errorHandlerService;

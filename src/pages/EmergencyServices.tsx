@@ -13,7 +13,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   Tooltip,
   Alert,
   CircularProgress,
@@ -99,8 +98,6 @@ const ModernEmergencyServices: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [selectedAlert, setSelectedAlert] = useState<EmergencyAlert | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
-  const [responseDialogOpen, setResponseDialogOpen] = useState(false)
-  const [responseNotes, setResponseNotes] = useState('')
   const [isInitialized, setIsInitialized] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [retryCount, setRetryCount] = useState(0)
@@ -247,53 +244,6 @@ const ModernEmergencyServices: React.FC = () => {
     }
   }, [fetchEmergencyAlerts, loading, showSnackbar])
 
-  // Handle alert response with validation
-  const handleRespondToAlert = useCallback(async (alertId: string, notes: string) => {
-    if (!alertId || !selectedAlert) {
-      showSnackbar('Invalid alert selected', 'error')
-      return
-    }
-
-    try {
-      setLoading(true)
-      setError(null)
-      
-      const response = await comprehensiveAdminService.respondToEmergency(alertId, {
-        responderId: 'admin',
-        responderName: 'Admin',
-        responseTime: Date.now(),
-        actions: ['contacted_user', 'dispatched_help'],
-        notes: notes.trim() || 'Emergency response initiated'
-      })
-      
-      if (response.success) {
-        // Update local state
-        setAlerts(prev => prev.map(alert => 
-          alert.id === alertId 
-            ? { ...alert, status: 'responded' as const, response: response.data }
-            : alert
-        ))
-        setActiveAlerts(prev => prev.filter(alert => alert.id !== alertId))
-        setResponseDialogOpen(false)
-        setResponseNotes('')
-        setSelectedAlert(null)
-        
-        showSnackbar('Emergency response recorded successfully', 'success')
-      } else {
-        const errorMessage = response.error?.message || 'Failed to respond to alert'
-        setError(errorMessage)
-        showSnackbar(errorMessage, 'error')
-      }
-    } catch (error) {
-      console.error('Error responding to alert:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to respond to alert'
-      setError(errorMessage)
-      showSnackbar(errorMessage, 'error')
-    } finally {
-      setLoading(false)
-    }
-  }, [selectedAlert, showSnackbar])
-
   // Get alert type icon with fallback
   const getAlertTypeIcon = useCallback((type: string) => {
     switch (type) {
@@ -372,12 +322,6 @@ const ModernEmergencyServices: React.FC = () => {
   // Handle dialog close with cleanup
   const handleCloseViewDialog = useCallback(() => {
     setViewDialogOpen(false)
-    setSelectedAlert(null)
-  }, [])
-
-  const handleCloseResponseDialog = useCallback(() => {
-    setResponseDialogOpen(false)
-    setResponseNotes('')
     setSelectedAlert(null)
   }, [])
 
@@ -735,25 +679,6 @@ const ModernEmergencyServices: React.FC = () => {
                         >
                           View Details
                         </Button>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          startIcon={<PhoneIcon />}
-                          onClick={() => {
-                            setSelectedAlert(alert)
-                            setResponseDialogOpen(true)
-                          }}
-                          sx={{ 
-                            flex: 1,
-                            bgcolor: getPriorityColor(alert.priority),
-                            '&:hover': {
-                              bgcolor: getPriorityColor(alert.priority),
-                              opacity: 0.9
-                            }
-                          }}
-                        >
-                          Respond
-                        </Button>
                       </Box>
                     </CardContent>
                   </Card>
@@ -858,69 +783,6 @@ const ModernEmergencyServices: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseViewDialog}>Close</Button>
-          <Button 
-            variant="contained" 
-            onClick={() => {
-              setViewDialogOpen(false)
-              setResponseDialogOpen(true)
-            }}
-            startIcon={<PhoneIcon />}
-          >
-            Respond to Alert
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Response Dialog */}
-      <Dialog open={responseDialogOpen} onClose={handleCloseResponseDialog} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
-        <DialogTitle>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Respond to Emergency Alert</Typography>
-            <IconButton onClick={handleCloseResponseDialog}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          {selectedAlert && (
-            <Box>
-              <Alert severity="warning" sx={{ mb: 3 }}>
-                <Typography variant="body2">
-                  <strong>Emergency Alert:</strong> {selectedAlert.type.toUpperCase()} - {selectedAlert.priority.toUpperCase()} Priority
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Location:</strong> {selectedAlert.location.address}
-                </Typography>
-              </Alert>
-              
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                label="Response Notes"
-                placeholder="Enter your response actions and notes..."
-                value={responseNotes}
-                onChange={(e) => setResponseNotes(e.target.value)}
-                sx={{ mb: 2 }}
-                helperText="Describe the actions taken and any additional information"
-              />
-              
-              <Typography variant="body2" color="textSecondary">
-                This will mark the alert as responded and notify the user.
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseResponseDialog}>Cancel</Button>
-          <Button 
-            variant="contained" 
-            onClick={() => selectedAlert && handleRespondToAlert(selectedAlert.id, responseNotes)}
-            disabled={loading}
-            startIcon={<PhoneIcon />}
-          >
-            {loading ? <CircularProgress size={20} /> : 'Respond to Alert'}
-          </Button>
         </DialogActions>
       </Dialog>
 

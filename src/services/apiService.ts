@@ -1,6 +1,19 @@
 import { ApiResponse } from '../types'
 import { secureTokenStorage } from './secureTokenStorage'
 import { API_BASE_URL } from '../config/apiConfig'
+import { mapError, mapErrorCode } from './errorHandlerService'
+
+export class ApiRequestError extends Error {
+  code: string
+  status?: number
+
+  constructor(code: string, message: string, status?: number) {
+    super(message)
+    this.code = code
+    this.status = status
+    this.name = 'ApiRequestError'
+  }
+}
 
 class ApiService {
   private baseURL: string
@@ -152,14 +165,24 @@ class ApiService {
                  }
                }
                
-               let errorMessage = 'Request failed'
+               let errorCode = 'UNKNOWN_ERROR'
                try {
                  const errorData = await response.json()
-                 errorMessage = errorData.error?.message || errorData.message || `HTTP ${response.status}: ${response.statusText}`
+                 errorCode = errorData.error?.code || errorCode
+                 const err = { code: errorCode, status: response.status, response: { data: errorData } }
+                 throw new ApiRequestError(
+                   mapErrorCode(err),
+                   mapError(err),
+                   response.status
+                 )
                } catch (parseError) {
-                 errorMessage = `HTTP ${response.status}: ${response.statusText}`
+                 if (parseError instanceof ApiRequestError) throw parseError
+                 throw new ApiRequestError(
+                   'UNKNOWN_ERROR',
+                   mapError({ status: response.status }),
+                   response.status
+                 )
                }
-               throw new Error(errorMessage)
              }
 
              const data = await response.json()
@@ -168,17 +191,18 @@ class ApiService {
              clearTimeout(timeoutId) // Clear timeout on error
              
              // Handle timeout errors gracefully
+             if (error instanceof ApiRequestError) throw error
+
              if (error.name === 'AbortError') {
-               throw new Error('Request timeout - please try again')
+               throw new ApiRequestError('TIMEOUT', mapError({ code: 'TIMEOUT' }))
              }
              
-             // Handle network errors gracefully
              if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-               throw new Error('Network error - please check your connection')
+               throw new ApiRequestError('NETWORK_ERROR', mapError({ code: 'NETWORK_ERROR' }))
              }
              
              console.error('API Request Error:', error)
-             throw error
+             throw new ApiRequestError('UNKNOWN_ERROR', mapError(error))
            }
          }
 
@@ -244,12 +268,33 @@ class ApiService {
 
       const backendData = await backendResponse.json()
       const backendJWT = backendData.data?.token
+      const backendUser = backendData.data?.user
       
       if (!backendJWT) {
         throw new Error('No backend JWT received from exchange')
       }
 
       await this.setToken(backendJWT, true)
+
+      if (backendUser) {
+        const existing = await secureTokenStorage.getCurrentUser()
+        if (existing) {
+          const expiresAt = Date.now() + (24 * 60 * 60 * 1000)
+          await secureTokenStorage.setTokenData({
+            token: backendJWT,
+            expiresAt,
+            user: {
+              ...existing,
+              role: backendUser.role ?? existing.role,
+              isActive: backendUser.isActive ?? existing.isActive,
+              displayName: backendUser.displayName ?? existing.displayName,
+              name: backendUser.displayName ?? backendUser.name ?? existing.name,
+            },
+            isBackendToken: true,
+          })
+        }
+      }
+
       console.log('✅ [API] Backend JWT refreshed successfully')
       return backendJWT
     } catch (error) {

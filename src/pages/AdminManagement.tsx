@@ -28,35 +28,76 @@ import {
   Card,
   CardContent,
   Avatar,
-  Tabs,
-  Tab,
   useMediaQuery,
 } from '@mui/material'
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  Block as BlockIcon,
   Person as PersonIcon,
   AdminPanelSettings as AdminIcon,
   Support as SupportIcon,
-  Search as SearchIcon,
 } from '@mui/icons-material'
 import { useSelector } from 'react-redux'
 import { RootState } from '../store'
 import { errorHandlerService } from '../services/errorHandlerService'
 import { apiService } from '../services/apiService'
-import { userTraceabilityService } from '../services/userTraceabilityService'
-
 interface AdminUser {
   uid: string
   email: string
   displayName: string
-  role: 'super_admin'
+  role: 'super_admin' | 'support'
   permissions: string[]
   lastLogin?: string
   createdAt: string
   isEmailVerified: boolean
   isActive?: boolean
+}
+
+/** marketplace-dev contract: array of admins or `{ admins: [] }` / nested `data`; shape otherwise unknown on old staging */
+function normalizeAdminUser(raw: Record<string, unknown>): AdminUser {
+  const role = raw.role === 'support' ? 'support' : 'super_admin'
+  const displayName =
+    (typeof raw.displayName === 'string' && raw.displayName) ||
+    (typeof raw.name === 'string' && raw.name) ||
+    (typeof raw.email === 'string' && raw.email) ||
+    'Admin'
+  return {
+    uid: String(raw.uid ?? raw.id ?? ''),
+    email: typeof raw.email === 'string' ? raw.email : '',
+    displayName,
+    role,
+    permissions: Array.isArray(raw.permissions) ? (raw.permissions as string[]) : [],
+    lastLogin: typeof raw.lastLogin === 'string' ? raw.lastLogin : undefined,
+    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+    isEmailVerified: raw.isEmailVerified === true || raw.isEmailVerified === 'true',
+    isActive: raw.isActive !== false,
+  }
+}
+
+function parseAdminsList(payload: unknown): AdminUser[] | null {
+  if (payload == null) return null
+  if (Array.isArray(payload)) {
+    return payload.map((item) => normalizeAdminUser((item ?? {}) as Record<string, unknown>))
+  }
+  if (typeof payload === 'object') {
+    const record = payload as Record<string, unknown>
+    if (Array.isArray(record.admins)) {
+      return record.admins.map((item) => normalizeAdminUser((item ?? {}) as Record<string, unknown>))
+    }
+    if (Array.isArray(record.data)) {
+      return record.data.map((item) => normalizeAdminUser((item ?? {}) as Record<string, unknown>))
+    }
+    if (record.data && typeof record.data === 'object') {
+      const inner = record.data as Record<string, unknown>
+      if (Array.isArray(inner.admins)) {
+        return inner.admins.map((item) => normalizeAdminUser((item ?? {}) as Record<string, unknown>))
+      }
+      if (Array.isArray(inner.data)) {
+        return inner.data.map((item) => normalizeAdminUser((item ?? {}) as Record<string, unknown>))
+      }
+    }
+  }
+  return null
 }
 
 const AdminManagement: React.FC = () => {
@@ -68,17 +109,12 @@ const AdminManagement: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [openDialog, setOpenDialog] = useState(false)
-  const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null)
   const [formData, setFormData] = useState({
     email: '',
     displayName: '',
-    role: 'super_admin' as AdminUser['role'],
-    permissions: [] as string[]
+    role: 'support' as AdminUser['role'],
+    temporaryPassword: '',
   })
-  const [activeTab, setActiveTab] = useState(0)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<any>(null)
-  const [searchLoading, setSearchLoading] = useState(false)
 
   const { user: currentUser } = useSelector((state: RootState) => state.auth)
 
@@ -94,12 +130,18 @@ const AdminManagement: React.FC = () => {
       // ✅ FIX: Use apiService with proper error handling
       const response = await apiService.get('/api/admin/admins')
       
-      if (response.success && response.data) {
-        setAdmins(Array.isArray(response.data) ? response.data : [])
+      if (response.success) {
+        const parsed = parseAdminsList(response.data)
+        if (parsed) {
+          setAdmins(parsed.filter((a) => a.uid))
+        } else if (response.data == null) {
+          setAdmins([])
+        } else {
+          setAdmins([])
+          setError('Unexpected admin list format from server. Try again or contact support.')
+        }
       } else {
-        // ✅ FIX: Check if endpoint doesn't exist and provide fallback
         if (response.error?.code === 'NOT_FOUND' || response.error?.code === '404') {
-          console.warn('Admin endpoint not found, using empty list')
           setAdmins([])
         } else {
           throw new Error(response.error?.message || 'Failed to load admins')
@@ -121,68 +163,59 @@ const AdminManagement: React.FC = () => {
     }
   }
 
-  const handleOpenDialog = (admin?: AdminUser) => {
-    if (admin) {
-      setEditingAdmin(admin)
-      setFormData({
-        email: admin.email,
-        displayName: admin.displayName,
-        role: admin.role,
-        permissions: admin.permissions
-      })
-    } else {
-      setEditingAdmin(null)
-      setFormData({
-        email: '',
-        displayName: '',
-        role: 'super_admin',
-        permissions: []
-      })
-    }
+  const handleOpenDialog = () => {
+    setFormData({
+      email: '',
+      displayName: '',
+      role: 'support',
+      temporaryPassword: '',
+    })
     setOpenDialog(true)
   }
 
   const handleCloseDialog = () => {
     setOpenDialog(false)
-    setEditingAdmin(null)
     setFormData({
       email: '',
       displayName: '',
-      role: 'super_admin',
-      permissions: []
+      role: 'support',
+      temporaryPassword: '',
     })
   }
 
   const handleSaveAdmin = async () => {
     try {
-      let response
-      
-      if (editingAdmin) {
-        response = await apiService.put(`/api/admin/admins/${editingAdmin.uid}`, formData)
-      } else {
-        response = await apiService.post('/api/admin/admins', formData)
-      }
-      
+      const response = await apiService.post('/api/admin/admins', {
+        email: formData.email,
+        displayName: formData.displayName,
+        role: formData.role,
+        temporaryPassword: formData.temporaryPassword,
+      })
+
       if (response.success) {
         setOpenDialog(false)
         loadAdmins()
       } else {
-        throw new Error(response.error?.message || 'Failed to save admin')
+        throw new Error(response.error?.message || 'Failed to create admin')
       }
     } catch (err: any) {
       setError(errorHandlerService.handleError(err).message)
     }
   }
 
-  const handleDeleteAdmin = async (admin: AdminUser) => {
-    if (window.confirm(`Are you sure you want to delete ${admin.displayName}?`)) {
+  const handleDisableAdmin = async (admin: AdminUser) => {
+    if (window.confirm(`Disable admin account for ${admin.displayName}?`)) {
       try {
-        const response = await apiService.delete(`/api/admin/admins/${admin.uid}`)
-        
+        const putResponse = await apiService.put(`/api/admin/admins/${admin.uid}`, { isActive: false })
+        const response =
+          putResponse.success
+            ? putResponse
+            : await apiService.delete(`/api/admin/admins/${admin.uid}`)
+
         if (response.success) {
           loadAdmins()
         } else {
-          throw new Error(response.error?.message || 'Failed to delete admin')
+          throw new Error(response.error?.message || 'Failed to disable admin')
         }
       } catch (err: any) {
         setError(errorHandlerService.handleError(err).message)
@@ -190,36 +223,18 @@ const AdminManagement: React.FC = () => {
     }
   }
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults(null)
-      return
+  const getRoleIcon = (role: AdminUser['role']) => {
+    return role === 'support' ? <SupportIcon color="info" /> : <AdminIcon color="primary" />
+  }
+
+  const getRoleColor = (role: AdminUser['role']) => {
+    return role === 'support' ? 'info' : 'primary'
+  }
+
+  const getRoleDescription = (role: AdminUser['role']) => {
+    if (role === 'support') {
+      return 'Support operations without super-admin configuration access'
     }
-
-    setSearchLoading(true)
-    try {
-      const results = await userTraceabilityService.getComprehensiveTraceability(searchQuery.trim())
-      setSearchResults(results)
-      console.log('🔍 Search results:', results)
-    } catch (err: any) {
-      setError(errorHandlerService.handleError(err).message)
-    } finally {
-      setSearchLoading(false)
-    }
-  }
-
-  const getRoleIcon = (_role: AdminUser['role']) => {
-    // All admins are super_admin with full access
-    return <AdminIcon color="primary" />
-  }
-
-  const getRoleColor = (_role: AdminUser['role']) => {
-    // All admins are super_admin with full access
-    return 'primary'
-  }
-
-  const getRoleDescription = (_role: AdminUser['role']) => {
-    // All admins are super_admin with full access
     return 'Full system access and user management'
   }
 
@@ -242,7 +257,7 @@ const AdminManagement: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
+            onClick={handleOpenDialog}
             disabled={currentUser?.role !== 'super_admin'}
           >
             Add Admin
@@ -250,25 +265,20 @@ const AdminManagement: React.FC = () => {
         </Box>
 
         {error && (
-          <Alert 
-            severity="error" 
+          <Alert
+            severity="error"
             sx={{ mb: 3 }}
-            onClose={() => setError(null)}
+            action={
+              <Button color="inherit" size="small" onClick={() => loadAdmins()}>
+                Retry
+              </Button>
+            }
           >
             {error}
           </Alert>
         )}
 
-        <Paper sx={{ mb: 3 }}>
-          <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
-            <Tab label="Admin Users" />
-            <Tab label="User Traceability" />
-          </Tabs>
-        </Paper>
-
-        {activeTab === 0 && (
-          <>
-            <Grid container spacing={3}>
+        <Grid container spacing={3}>
               {/* Admin Stats Cards */}
               <Grid item xs={12} md={4}>
                 <Card>
@@ -331,7 +341,7 @@ const AdminManagement: React.FC = () => {
                               <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
                                 <Box display="flex" alignItems="center" gap={1.5} flex={1}>
                                   <Avatar>
-                                    {admin.displayName.charAt(0).toUpperCase()}
+                                    {(admin.displayName?.charAt(0) || '?').toUpperCase()}
                                   </Avatar>
                                   <Box flex={1}>
                                     <Typography variant="subtitle2" fontWeight="600">
@@ -345,18 +355,15 @@ const AdminManagement: React.FC = () => {
                                 <Box display="flex" gap={0.5}>
                                   <IconButton
                                     size="small"
-                                    onClick={() => handleOpenDialog(admin)}
-                                    disabled={currentUser?.role !== 'super_admin'}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleDeleteAdmin(admin)}
-                                    disabled={currentUser?.role !== 'super_admin' || admin.uid === currentUser?.uid}
+                                    onClick={() => handleDisableAdmin(admin)}
+                                    disabled={
+                                      currentUser?.role !== 'super_admin' ||
+                                      admin.uid === currentUser?.uid ||
+                                      admin.isActive === false
+                                    }
                                     color="error"
                                   >
-                                    <DeleteIcon fontSize="small" />
+                                    <BlockIcon fontSize="small" />
                                   </IconButton>
                                 </Box>
                               </Box>
@@ -375,7 +382,7 @@ const AdminManagement: React.FC = () => {
                                   size="small"
                                 />
                                 <Typography variant="caption" color="text.secondary">
-                                  {admin.permissions.length} permissions
+                                  {(admin.permissions?.length ?? 0)} permissions
                                 </Typography>
                               </Box>
                               <Typography variant="caption" color="text.secondary" mt={1} display="block">
@@ -409,7 +416,7 @@ const AdminManagement: React.FC = () => {
                               <TableCell>
                                 <Box display="flex" alignItems="center">
                                   <Avatar sx={{ mr: 2 }}>
-                                    {admin.displayName.charAt(0).toUpperCase()}
+                                    {(admin.displayName?.charAt(0) || '?').toUpperCase()}
                                   </Avatar>
                                   <Box>
                                     <Typography variant="subtitle2">
@@ -434,7 +441,7 @@ const AdminManagement: React.FC = () => {
                               </TableCell>
                               <TableCell>
                                 <Typography variant="body2">
-                                  {admin.permissions.length} permissions
+                                  {(admin.permissions?.length ?? 0)} permissions
                                 </Typography>
                               </TableCell>
                               <TableCell>
@@ -454,17 +461,16 @@ const AdminManagement: React.FC = () => {
                               </TableCell>
                               <TableCell>
                                 <IconButton
-                                  onClick={() => handleOpenDialog(admin)}
-                                  disabled={currentUser?.role !== 'super_admin'}
-                                >
-                                  <EditIcon />
-                                </IconButton>
-                                <IconButton
-                                  onClick={() => handleDeleteAdmin(admin)}
-                                  disabled={currentUser?.role !== 'super_admin' || admin.uid === currentUser?.uid}
+                                  onClick={() => handleDisableAdmin(admin)}
+                                  disabled={
+                                    currentUser?.role !== 'super_admin' ||
+                                    admin.uid === currentUser?.uid ||
+                                    admin.isActive === false
+                                  }
                                   color="error"
+                                  title="Disable admin"
                                 >
-                                  <DeleteIcon />
+                                  <BlockIcon />
                                 </IconButton>
                               </TableCell>
                             </TableRow>
@@ -476,141 +482,9 @@ const AdminManagement: React.FC = () => {
                 </Paper>
               </Grid>
             </Grid>
-          </>
-        )}
 
-        {activeTab === 1 && (
-          <Box>
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                User Traceability Search
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Search for users by Firebase UID, role-based UID, or phone number to trace across all roles and collections.
-              </Typography>
-              <Box display="flex" gap={2} alignItems="center">
-                <TextField
-                  fullWidth
-                  label="Search by UID or Phone Number"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Enter Firebase UID, role-based UID, or phone number"
-                />
-                <Button
-                  variant="contained"
-                  startIcon={<SearchIcon />}
-                  onClick={handleSearch}
-                  disabled={searchLoading || !searchQuery.trim()}
-                >
-                  {searchLoading ? <CircularProgress size={20} /> : 'Search'}
-                </Button>
-              </Box>
-            </Paper>
-
-            {searchResults && (
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Search Results
-                </Typography>
-                
-                {searchResults.firebaseUID && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Found by Firebase UID
-                    </Typography>
-                    <Card>
-                      <CardContent>
-                        <Typography variant="body2">
-                          <strong>Firebase UID:</strong> {searchResults.firebaseUID.firebaseUID}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Role-based UID:</strong> {searchResults.firebaseUID.roleBasedUID || 'N/A'}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Phone:</strong> {searchResults.firebaseUID.phone}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Roles:</strong> {searchResults.firebaseUID.roles.join(', ')}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Collections:</strong> {searchResults.firebaseUID.foundInCollections.join(', ')}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Box>
-                )}
-
-                {searchResults.roleBasedUID && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Found by Role-based UID
-                    </Typography>
-                    <Card>
-                      <CardContent>
-                        <Typography variant="body2">
-                          <strong>Firebase UID:</strong> {searchResults.roleBasedUID.firebaseUID}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Role-based UID:</strong> {searchResults.roleBasedUID.roleBasedUID}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Phone:</strong> {searchResults.roleBasedUID.phone}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Roles:</strong> {searchResults.roleBasedUID.roles.join(', ')}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Collections:</strong> {searchResults.roleBasedUID.foundInCollections.join(', ')}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Box>
-                )}
-
-                {searchResults.phoneNumber && searchResults.phoneNumber.length > 0 && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Found by Phone Number ({searchResults.phoneNumber.length} results)
-                    </Typography>
-                    {searchResults.phoneNumber.map((result: any, index: number) => (
-                      <Card key={index} sx={{ mb: 2 }}>
-                        <CardContent>
-                          <Typography variant="body2">
-                            <strong>Firebase UID:</strong> {result.firebaseUID}
-                          </Typography>
-                          <Typography variant="body2">
-                            <strong>Role-based UID:</strong> {result.roleBasedUID}
-                          </Typography>
-                          <Typography variant="body2">
-                            <strong>Phone:</strong> {result.phone}
-                          </Typography>
-                          <Typography variant="body2">
-                            <strong>Roles:</strong> {result.roles.join(', ')}
-                          </Typography>
-                          <Typography variant="body2">
-                            <strong>Collections:</strong> {result.foundInCollections.join(', ')}
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </Box>
-                )}
-
-                {!searchResults.firebaseUID && !searchResults.roleBasedUID && (!searchResults.phoneNumber || searchResults.phoneNumber.length === 0) && (
-                  <Alert severity="info">
-                    No users found matching the search criteria.
-                  </Alert>
-                )}
-              </Paper>
-            )}
-          </Box>
-        )}
-
-        {/* Add/Edit Admin Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
-          <DialogTitle>
-            {editingAdmin ? 'Edit Admin User' : 'Add New Admin User'}
-          </DialogTitle>
+          <DialogTitle>Add New Admin User</DialogTitle>
           <DialogContent>
             <Box sx={{ pt: 1 }}>
               <TextField
@@ -619,13 +493,20 @@ const AdminManagement: React.FC = () => {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 margin="normal"
-                disabled={!!editingAdmin}
               />
               <TextField
                 fullWidth
                 label="Display Name"
                 value={formData.displayName}
                 onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                margin="normal"
+              />
+              <TextField
+                fullWidth
+                label="Temporary Password"
+                type="password"
+                value={formData.temporaryPassword}
+                onChange={(e) => setFormData({ ...formData, temporaryPassword: e.target.value })}
                 margin="normal"
               />
               <FormControl fullWidth margin="normal">
@@ -636,6 +517,7 @@ const AdminManagement: React.FC = () => {
                   label="Role"
                 >
                   <MenuItem value="super_admin">Super Admin (Full Access)</MenuItem>
+                  <MenuItem value="support">Support</MenuItem>
                 </Select>
               </FormControl>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -645,8 +527,12 @@ const AdminManagement: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button onClick={handleSaveAdmin} variant="contained">
-              {editingAdmin ? 'Update' : 'Create'}
+            <Button
+              onClick={handleSaveAdmin}
+              variant="contained"
+              disabled={!formData.email || !formData.displayName || !formData.temporaryPassword}
+            >
+              Create
             </Button>
           </DialogActions>
         </Dialog>

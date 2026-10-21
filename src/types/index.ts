@@ -5,7 +5,8 @@ export interface User {
   email: string | null
   name: string | null // Alias for displayName for backward compatibility
   displayName: string | null
-  role: 'super_admin' | 'pending'
+  role: 'super_admin' | 'support'
+  isActive?: boolean
   idToken?: string
   refreshToken?: string
   lastLogin?: string

@@ -27,23 +27,22 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
-  MenuItem,
   CircularProgress,
   useMediaQuery,
+  Alert,
 } from '@mui/material'
 import {
   Support as SupportIcon,
   Visibility as VisibilityIcon,
   Refresh as RefreshIcon,
   FilterList as FilterListIcon,
-  Reply as ReplyIcon,
   CheckCircle as CheckCircleIcon,
   // Cancel as CancelIcon, // Removed unused import
 } from '@mui/icons-material'
 import { useSelector } from 'react-redux'
 import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
-import { fetchSupportTickets, updateTicketStatus, sendMessage, setPagination } from '../store/slices/supportSlice' // Removed unused setFilters
+import { fetchSupportTickets, setPagination, clearError } from '../store/slices/supportSlice'
 import { SupportTicket } from '../types'
 import { supportService } from '../services/supportService'
 
@@ -53,55 +52,22 @@ const SupportTickets: React.FC = () => {
   const isMobile = useMediaQuery('(max-width: 600px)')
   
   const dispatch = useAppDispatch()
-  const { tickets, loading, pagination, filters, stats } = useSelector((state: RootState) => state.support)
+  const { tickets, loading, pagination, filters, stats, error: listError } = useSelector((state: RootState) => state.support)
   
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
-  const [replyDialogOpen, setReplyDialogOpen] = useState(false)
-  const [replyMessage, setReplyMessage] = useState('')
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [resolutionNotes, setResolutionNotes] = useState('')
-  const [newStatus, setNewStatus] = useState('')
   const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
-    // Guard against infinite loops by checking if data is already loading
-    if (!loading) {
-      dispatch(fetchSupportTickets({ pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit }, filters }))
-    }
-  }, [dispatch, pagination.page, pagination.limit, filters.status, filters.priority, filters.category, loading])
-
-  const handleReply = async () => {
-    if (selectedTicket && replyMessage.trim()) {
-      try {
-        await dispatch(sendMessage({
-          ticketId: selectedTicket.id,
-          message: replyMessage,
-        }))
-        setReplyDialogOpen(false)
-        setReplyMessage('')
-      } catch (error) {
-        console.error('Error sending reply:', error)
-      }
-    }
-  }
-
-  const handleStatusUpdate = async () => {
-    if (selectedTicket && newStatus) {
-      try {
-        await dispatch(updateTicketStatus({
-          ticketId: selectedTicket.id,
-          status: newStatus
-        }))
-        setStatusDialogOpen(false)
-        setSelectedTicket(null)
-        setNewStatus('')
-      } catch (error) {
-        console.error('Error updating ticket status:', error)
-      }
-    }
-  }
+    dispatch(
+      fetchSupportTickets({
+        pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit },
+        filters,
+      })
+    )
+  }, [dispatch, pagination.page, pagination.limit, filters.status, filters.priority, filters.category])
 
   const handleResolveTicket = async () => {
     if (selectedTicket && resolutionNotes.trim()) {
@@ -164,10 +130,9 @@ const SupportTickets: React.FC = () => {
     return new Date(timestamp).toLocaleString()
   }
 
-  const statusOptions = ['open', 'in_progress', 'resolved', 'closed']
+  const showFullPageLoader = loading && tickets.length === 0 && !listError
 
-  // Show loading state
-  if (loading && tickets.length === 0) {
+  if (showFullPageLoader) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress size={60} />
@@ -180,6 +145,27 @@ const SupportTickets: React.FC = () => {
 
   return (
     <Box>
+      {listError && (
+        <Alert
+          severity="error"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                dispatch(clearError())
+                dispatch(fetchSupportTickets({ pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit }, filters }))
+              }}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {listError}
+        </Alert>
+      )}
+
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1" fontWeight="bold">
           Support Tickets
@@ -344,15 +330,6 @@ const SupportTickets: React.FC = () => {
                         >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setSelectedTicket(ticket)
-                            setReplyDialogOpen(true)
-                          }}
-                        >
-                          <ReplyIcon fontSize="small" />
-                        </IconButton>
                       </Box>
                     </Box>
                   </Card>
@@ -434,29 +411,6 @@ const SupportTickets: React.FC = () => {
                             }}
                           >
                             <VisibilityIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Reply">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelectedTicket(ticket)
-                              setReplyDialogOpen(true)
-                            }}
-                          >
-                            <ReplyIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Update Status">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelectedTicket(ticket)
-                              setNewStatus(ticket.status)
-                              setStatusDialogOpen(true)
-                            }}
-                          >
-                            <CheckCircleIcon />
                           </IconButton>
                         </Tooltip>
                       </TableCell>
@@ -644,78 +598,6 @@ const SupportTickets: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Reply Dialog */}
-      <Dialog open={replyDialogOpen} onClose={() => setReplyDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
-        <DialogTitle>Reply to Ticket</DialogTitle>
-        <DialogContent>
-          {selectedTicket && (
-            <Box>
-              <Typography variant="body1" mb={2}>
-                Ticket: #{selectedTicket.ticketId} - {selectedTicket.subject}
-              </Typography>
-              <TextField
-                fullWidth
-                label="Reply Message"
-                multiline
-                rows={6}
-                value={replyMessage}
-                onChange={(e) => setReplyMessage(e.target.value)}
-                margin="normal"
-                required
-                placeholder="Type your reply here..."
-              />
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReplyDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleReply}
-            variant="contained"
-            disabled={!replyMessage.trim()}
-          >
-            Send Reply
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Status Update Dialog */}
-      <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
-        <DialogTitle>Update Ticket Status</DialogTitle>
-        <DialogContent>
-          {selectedTicket && (
-            <Box>
-              <Typography variant="body1" mb={2}>
-                Ticket: #{selectedTicket.ticketId} - {selectedTicket.subject}
-              </Typography>
-              <TextField
-                fullWidth
-                select
-                label="Status"
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value)}
-                margin="normal"
-              >
-                {statusOptions.map((status) => (
-                  <MenuItem key={status} value={status}>
-                    {(status || 'unknown').replace('_', ' ').toUpperCase()}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleStatusUpdate}
-            variant="contained"
-            disabled={!newStatus || newStatus === selectedTicket?.status}
-          >
-            Update Status
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

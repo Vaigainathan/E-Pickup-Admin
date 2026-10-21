@@ -1,5 +1,7 @@
 import { apiService } from './apiService'
 import { Booking, PaginationParams, FilterParams } from '../types'
+import { mapError } from './errorHandlerService'
+import { ApiRequestError } from './apiService'
 
 interface BookingsResponse {
   bookings: Booking[]
@@ -12,49 +14,50 @@ interface BookingsResponse {
 }
 
 class BookingService {
-  async getBookings(
-    pagination: PaginationParams,
-    filters: FilterParams = {}
-  ): Promise<BookingsResponse> {
-    // ✅ CRITICAL FIX: Use correct backend endpoint
-    const params = {
-      page: pagination.page,
-      limit: pagination.limit,
-      ...filters
-    }
-    
+  async getBookings(pagination: PaginationParams, filters: FilterParams = {}): Promise<BookingsResponse> {
+    const params = { page: pagination.page, limit: pagination.limit, ...filters }
     const response = await apiService.get('/api/admin/bookings', params)
     if (response.success && response.data) {
       return response.data as BookingsResponse
     }
-    throw new Error(response.error?.message || 'Failed to fetch bookings')
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
   }
 
   async getActiveBookings(): Promise<Booking[]> {
-    // ✅ CRITICAL FIX: Use correct backend endpoint
     const response = await apiService.get('/api/admin/bookings/active')
     if (response.success && response.data) {
-      return response.data as Booking[]
+      const data = response.data as any
+      return Array.isArray(data) ? data : data.bookings || []
     }
-    throw new Error(response.error?.message || 'Failed to fetch active bookings')
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
   }
 
   async getBookingById(bookingId: string): Promise<Booking> {
-    // ✅ CRITICAL FIX: Use correct backend endpoint
     const response = await apiService.get(`/api/admin/bookings/${bookingId}`)
     if (response.success && response.data) {
       return response.data as Booking
     }
-    throw new Error(response.error?.message || 'Failed to fetch booking details')
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
   }
 
   async updateBookingStatus(bookingId: string, status: string): Promise<{ status: string; message: string }> {
-    // ✅ CRITICAL FIX: Use correct backend endpoint
     const response = await apiService.put(`/api/admin/bookings/${bookingId}/status`, { status })
     if (response.success && response.data) {
       return response.data as any
     }
-    throw new Error(response.error?.message || 'Failed to update booking status')
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
   }
 
   async interveneBooking(
@@ -67,7 +70,6 @@ class BookingService {
       notificationMessage?: string
     }
   ): Promise<{ action: string; message: string; data?: any }> {
-    // ✅ CRITICAL FIX: Use correct backend endpoint
     const response = await apiService.post(`/api/admin/bookings/${bookingId}/intervene`, {
       action,
       reason,
@@ -76,100 +78,21 @@ class BookingService {
     if (response.success && response.data) {
       return response.data as any
     }
-    throw new Error(response.error?.message || 'Failed to intervene in booking')
-  }
-
-  async getBookingTracking(bookingId: string): Promise<any> {
-    const response = await apiService.get(`/admin/tracking/${bookingId}`)
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to fetch booking tracking')
-  }
-
-  async getBookingAnalytics(): Promise<any> {
-    const response = await apiService.get('/api/admin/bookings/analytics')
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to fetch booking analytics')
-  }
-
-  async cancelBooking(bookingId: string, reason: string): Promise<{ message: string }> {
-    const response = await apiService.put(`/admin/bookings/${bookingId}/cancel`, { reason })
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to cancel booking')
-  }
-
-  async reassignDriver(bookingId: string, driverId: string): Promise<{ message: string }> {
-    const response = await apiService.put(`/admin/bookings/${bookingId}/reassign`, { driverId })
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to reassign driver')
-  }
-
-  async adjustFare(bookingId: string, newFare: number, reason: string): Promise<{ message: string }> {
-    const response = await apiService.put(`/admin/bookings/${bookingId}/adjust-fare`, {
-      newFare,
-      reason,
-    })
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to adjust fare')
-  }
-
-  async getBookingHistory(bookingId: string): Promise<any[]> {
-    const response = await apiService.get(`/admin/bookings/${bookingId}/history`)
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to fetch booking history')
-  }
-
-  async sendNotificationToBooking(
-    bookingId: string,
-    message: string,
-    type: 'info' | 'warning' | 'error' = 'info'
-  ): Promise<{ message: string }> {
-    const response = await apiService.post(`/admin/bookings/${bookingId}/notify`, {
-      message,
-      type,
-    })
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to send notification')
-  }
-
-  async getBookingReports(
-    startDate: string,
-    endDate: string,
-    filters?: FilterParams
-  ): Promise<any> {
-    const params = {
-      startDate,
-      endDate,
-      ...filters,
-    }
-    const response = await apiService.get('/api/admin/bookings/reports', params)
-    if (response.success && response.data) {
-      return response.data as any
-    }
-    throw new Error(response.error?.message || 'Failed to fetch booking reports')
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
   }
 
   async deleteBooking(bookingId: string, reason?: string): Promise<{ message: string }> {
-    // ✅ CRITICAL FIX: Use correct backend endpoint for admin deletion
-    const endpoint = `/api/admin/bookings/${bookingId}`
-    const response = await apiService.delete(endpoint, reason ? { reason } : undefined)
-    if (response.success && response.data) {
-      return response.data as any
+    const response = await apiService.delete(`/api/admin/bookings/${bookingId}`, reason ? { reason } : undefined)
+    if (response.success) {
+      return (response.data as any) || { message: 'Booking deleted' }
     }
-    throw new Error(response.error?.message || 'Failed to delete booking')
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
   }
 }
 

@@ -42,6 +42,7 @@ import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
 import { logout } from '../store/slices/authSlice'
 import { AdminColors } from '../constants/Colors'
+import { canAccessRoute } from '../config/roleAccess'
 
 const drawerWidth = 240
 
@@ -106,6 +107,11 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
     return activeEmergencyCount + openSupportCount
   }, [activeAlerts, tickets])
 
+  const visibleMenuItems = useMemo(
+    () => menuItems.filter((item) => canAccessRoute(user?.role, item.path)),
+    [user?.role]
+  )
+
   const drawer = (
     <div>
       <Toolbar>
@@ -115,7 +121,7 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
       </Toolbar>
       <Divider />
       <List role="list" aria-label="Navigation menu">
-        {menuItems.map((item) => (
+        {visibleMenuItems.map((item) => (
           <ListItem key={item.text} disablePadding role="listitem">
             <ListItemButton
               selected={location.pathname === item.path}

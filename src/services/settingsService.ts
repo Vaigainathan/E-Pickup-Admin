@@ -66,14 +66,6 @@ class SettingsService {
     throw new Error(response.error?.message || 'Failed to restart system')
   }
 
-  async getSystemInfo(): Promise<any> {
-    const response = await apiService.get('/api/admin/system/info')
-    if (response.success && response.data) {
-      return response.data
-    }
-    throw new Error(response.error?.message || 'Failed to fetch system info')
-  }
-
   async getBackupList(): Promise<any[]> {
     const response = await apiService.get<any[]>('/api/admin/system/backups')
     if (response.success && response.data) {

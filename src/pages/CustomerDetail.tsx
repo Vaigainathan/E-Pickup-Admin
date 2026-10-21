@@ -37,7 +37,6 @@ import {
 import {
   Person as PersonIcon,
   CheckCircle as CheckCircleIcon,
-  Delete as DeleteIcon,
   Block as BlockIcon,
   Pending as PendingIcon,
   Info as InfoIcon,
@@ -98,7 +97,6 @@ const CustomerDetail: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState(0)
 
   // Dialog states
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [banDialogOpen, setBanDialogOpen] = useState(false)
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false)
   // Wallet-related state removed - no wallet system for customers
@@ -196,24 +194,6 @@ const CustomerDetail: React.FC = () => {
       totalFare
     }
   }, [bookings])
-
-  // Handle customer actions
-  const handleDeleteCustomer = async () => {
-    if (!customer) return
-
-    try {
-      const response = await customerService.deleteCustomer(customer.id)
-      
-      if (response.success) {
-        navigate('/customers')
-      } else {
-        setError(response.error?.message || 'Failed to delete customer')
-      }
-    } catch (err) {
-      setError('Failed to delete customer')
-      console.error('Error deleting customer:', err)
-    }
-  }
 
   const handleBanCustomer = async () => {
     if (!customer) return
@@ -395,14 +375,6 @@ const CustomerDetail: React.FC = () => {
                   color="error"
                 >
                   Ban Customer
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<DeleteIcon />}
-                  onClick={() => setDeleteDialogOpen(true)}
-                  color="error"
-                >
-                  Delete Customer
                 </Button>
               </Stack>
             </Grid>
@@ -736,25 +708,6 @@ const CustomerDetail: React.FC = () => {
 
         {/* Wallet tab content removed - no wallet system for customers */}
       </Card>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} fullScreen={isMobileDialog}>
-        <DialogTitle>Delete Customer</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to permanently delete this customer? This action cannot be undone.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Customer: {customer.name || customer.personalInfo?.name}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteCustomer} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Ban Confirmation Dialog */}
       <Dialog open={banDialogOpen} onClose={() => setBanDialogOpen(false)} fullScreen={isMobileDialog}>

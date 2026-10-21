@@ -79,7 +79,10 @@ export const fetchSystemLogs = createAsyncThunk(
   'system/fetchLogs',
   async (params: { limit?: number; level?: string }, { rejectWithValue }) => {
     try {
-      const response = await systemService.getSystemLogs(params.limit, params.level)
+      const response = await systemService.getSystemLogs({
+        limit: params.limit,
+        level: params.level,
+      })
       return response
     } catch (error: any) {
       return rejectWithValue(error.message)

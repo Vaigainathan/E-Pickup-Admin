@@ -85,7 +85,6 @@ import {
   People as PeopleIcon,
   LocalShipping as DeliveryIcon,
   List as ListIcon,
-  BugReport as BugReportIcon,
   // Schedule as ScheduleIcon,
   // History as HistoryIcon,
   // AccessTime as AccessTimeIcon,
@@ -460,7 +459,12 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       const response = await comprehensiveAdminService.getDrivers()
       
       if (response.success && response.data) {
-        const driversData = (response.data as any[]).map((driver: any) => {
+        const rawDrivers: any[] = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.drivers)
+            ? (response.data as any).drivers
+            : []
+        const driversData: Driver[] = rawDrivers.map((driver: any) => {
           // ✅ CRITICAL: Preserve isVerified from service FIRST - this is the source of truth
           // The service already calculated this correctly based on documents
           const serviceIsVerified = driver.isVerified;
@@ -1499,86 +1503,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
       }
     }
   }, [selectedDriver, handleCloseActions])
-
-  const handleDebugDocuments = useCallback(async () => {
-    if (selectedDriver) {
-      try {
-        console.log(`🔍 Debug: Checking document flow for driver: ${selectedDriver.id}`)
-        const response = await comprehensiveAdminService.debugDriverDocuments(selectedDriver.id)
-        
-        if (response.success && response.data) {
-          console.log('🔍 Debug information received:', {
-            keys: Object.keys(response.data || {}),
-          })
-          
-          // Show deduplicated count (actual documents)
-          const deduplicatedCount = Object.keys(response.data.userCollectionDocuments || {}).length
-          const rawCount = Object.keys(response.data.userCollectionDocumentsRaw || {}).length
-          
-          alert(`Debug info logged to console. Check browser console for details.\n\nDriver: ${response.data.driverName}\nVerification Status: ${response.data.verificationStatus}\nUser Documents: ${deduplicatedCount} found${rawCount > deduplicatedCount ? ` (${rawCount} raw keys)` : ''}\nVerification Requests: ${response.data.verificationRequests.length} found\nDriver Documents Collection: ${response.data.driverDocumentsCollection.length} found`)
-        } else {
-          console.error('❌ Debug failed:', response.error)
-          setError(response.error?.message || 'Debug failed')
-        }
-      } catch (error) {
-        console.error('❌ Debug error:', error)
-        setError('Debug failed')
-      }
-    }
-  }, [selectedDriver])
-
-  const handleTestVerificationFlow = useCallback(async () => {
-    if (selectedDriver) {
-      try {
-        console.log(`🧪 Testing verification flow for driver: ${selectedDriver.id}`)
-        const response = await apiService.post(`/api/admin/test-verification-flow/${selectedDriver.id}`)
-        
-        if (response.success && response.data) {
-          console.log('🧪 Test results received:', {
-            keys: Object.keys(response.data || {}),
-          })
-          const testData = response.data as any
-          const passedTests = testData.documentTests?.filter((test: any) => test.verificationTest === 'PASS').length || 0
-          const totalTests = testData.documentTests?.length || 0
-          
-          alert(`Verification Flow Test Results:\n\nDriver: ${testData.driverName || 'Unknown'}\nCurrent Status: ${testData.currentStatus || 'Unknown'}\nDocuments Found: ${testData.documentsFound || 0}\nVerification Requests: ${testData.verificationRequests || 0}\n\nDocument Tests: ${passedTests}/${totalTests} passed\nOverall Verification: ${testData.overallVerificationTest || 'Unknown'}\nStatus Sync: ${testData.statusSyncTest || 'Unknown'}\n\nCheck console for detailed results.`)
-        } else {
-          console.error('❌ Test failed:', response.error)
-          setError(response.error?.message || 'Test failed')
-        }
-      } catch (error) {
-        console.error('❌ Test error:', error)
-        setError('Test failed')
-      }
-    }
-  }, [selectedDriver])
-
-  const handleTestDocumentAccess = useCallback(async () => {
-    if (selectedDriver) {
-      try {
-        console.log(`🔍 Testing document access for driver: ${selectedDriver.id}`)
-        const response = await comprehensiveAdminService.testDocumentAccess(selectedDriver.id)
-        
-        if (response.success && response.data) {
-          console.log('🔍 Document access test results:', {
-            summary: response.data?.summary,
-          })
-          const testData = response.data
-          const accessibleDocs = testData.summary?.accessibleDocuments || 0
-          const totalDocs = testData.summary?.totalDocuments || 0
-          
-          alert(`Document Access Test Results:\n\nDriver: ${testData.driverName}\nTotal Documents: ${totalDocs}\nAccessible: ${accessibleDocs}\nInaccessible: ${totalDocs - accessibleDocs}\n\nCheck console for detailed results.`)
-        } else {
-          console.error('❌ Document access test failed:', response.error)
-          setError(response.error?.message || 'Document access test failed')
-        }
-      } catch (error) {
-        console.error('❌ Document access test error:', error)
-        setError('Document access test failed')
-      }
-    }
-  }, [selectedDriver])
-
 
   const handleViewDetails = useCallback(() => {
     setViewDialogOpen(true)
@@ -3071,33 +2995,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               </ListItemIcon>
               <ListItemText 
                 primary="View Documents" 
-                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
-              />
-            </MenuItem>
-            <MenuItem onClick={handleDebugDocuments}>
-              <ListItemIcon>
-                <BugReportIcon fontSize="small" color="warning" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Debug Documents" 
-                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
-              />
-            </MenuItem>
-            <MenuItem onClick={handleTestVerificationFlow}>
-              <ListItemIcon>
-                <CheckCircleIcon fontSize="small" color="info" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Test Verification Flow" 
-                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
-              />
-            </MenuItem>
-            <MenuItem onClick={handleTestDocumentAccess}>
-              <ListItemIcon>
-                <CloudDownloadIcon fontSize="small" color="secondary" />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Test Document Access" 
                 primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
               />
             </MenuItem>

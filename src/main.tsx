@@ -14,7 +14,15 @@ async function bootstrap() {
   const { default: App } = await import('./App.tsx')
   const { store } = await import('./store/index.ts')
   const { theme } = await import('./theme/index.ts')
+  const { initializeAuth, verifyAdminSession } = await import('./store/slices/authSlice')
+  const { apiService } = await import('./services/apiService')
   await import('./index.css')
+
+  const initResult = await store.dispatch(initializeAuth())
+  if (initializeAuth.fulfilled.match(initResult) && initResult.payload.isAuthenticated && initResult.payload.token) {
+    await apiService.setToken(initResult.payload.token, true)
+    await store.dispatch(verifyAdminSession())
+  }
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

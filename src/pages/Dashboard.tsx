@@ -55,6 +55,8 @@ import {
   Settings as SettingsIcon,
 } from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
+import { RootState } from '../store'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { websocketService } from '../services/websocketService'
 import { secureTokenStorage } from '../services/secureTokenStorage'
@@ -181,6 +183,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   const navigate = useNavigate()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const authUser = useSelector((state: RootState) => state.auth.user)
+  const canViewRevenue = authUser?.role !== 'support'
   const [isInitialized, setIsInitialized] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -201,8 +205,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   const [supportTickets, setSupportTickets] = useState<any[]>([])
   const [systemHealth, setSystemHealth] = useState<any>(null)
   const [customers, setCustomers] = useState<any[]>([])
-  const [cancellations, setCancellations] = useState<any[]>([]) // ✅ NEW: Cancellations state
-
   // Loading states
   const [driversLoading, setDriversLoading] = useState(false)
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -210,8 +212,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   const [ticketsLoading, setTicketsLoading] = useState(false)
   const [healthLoading, setHealthLoading] = useState(false)
   const [customersLoading, setCustomersLoading] = useState(false)
-  const [cancellationsLoading, setCancellationsLoading] = useState(false) // ✅ NEW: Cancellations loading
-  
   // Revenue state
   const [revenueLoading, setRevenueLoading] = useState(false)
   const [revenueData, setRevenueData] = useState<any>(null)
@@ -384,8 +384,12 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
       const response = await comprehensiveAdminService.getDrivers()
       
       if (response.success && response.data) {
-        // Process and enhance driver data
-        const processedDrivers = response.data.map((driver: any) => ({
+        const driverList = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.drivers)
+            ? (response.data as any).drivers
+            : []
+        const processedDrivers = driverList.map((driver: any) => ({
           ...driver,
           // Ensure we have proper data structure
           personalInfo: {
@@ -474,29 +478,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         console.log('✅ Drivers fetched and processed successfully:', processedDrivers.length)
       } else {
         console.error('❌ Failed to fetch drivers:', response.error)
-        // Set some mock data for demonstration if API fails
-        const mockDrivers = [
-          {
-            id: 'driver-1',
-            personalInfo: { name: 'John Smith', email: 'john@example.com', phone: '+1234567890' },
-            vehicleInfo: { make: 'Honda', model: 'Civic', year: 2020, color: 'Blue', plateNumber: 'ABC123' },
-            isActive: true,
-            isVerified: true,
-            status: 'verified',
-            createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString() // 30 minutes ago
-          },
-          {
-            id: 'driver-2',
-            personalInfo: { name: 'Sarah Johnson', email: 'sarah@example.com', phone: '+1234567891' },
-            vehicleInfo: { make: 'Toyota', model: 'Camry', year: 2019, color: 'Red', plateNumber: 'XYZ789' },
-            isActive: true,
-            isVerified: false,
-            status: 'pending',
-            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() // 2 hours ago
-          }
-        ]
-        setDrivers(mockDrivers)
-        console.log('⚠️ Using mock driver data for demonstration')
+        setDrivers([])
+        setError(response.error?.message || 'Failed to fetch drivers')
       }
     } catch (error) {
       console.error('❌ Error fetching drivers:', error)
@@ -515,8 +498,12 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
       const response = await comprehensiveAdminService.getBookings()
       
       if (response.success && response.data) {
-        // Process and enhance booking data
-        const processedBookings = response.data.map((booking: any) => ({
+        const bookingList = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.bookings)
+            ? (response.data as any).bookings
+            : []
+        const processedBookings = bookingList.map((booking: any) => ({
           ...booking,
           customerInfo: {
             name: booking?.customerInfo?.name || booking?.customerName || 'Customer',
@@ -547,29 +534,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         console.log('✅ Bookings fetched and processed successfully:', processedBookings.length)
       } else {
         console.error('❌ Failed to fetch bookings:', response.error)
-        // Set some mock data for demonstration if API fails
-        const mockBookings = [
-          {
-            id: 'booking-1',
-            customerInfo: { name: 'Alice Brown', phone: '+1234567892', email: 'alice@example.com' },
-            pickupLocation: { address: '123 Main St, Downtown', latitude: 40.7128, longitude: -74.0060 },
-            dropoffLocation: { address: '456 Oak Ave, Uptown', latitude: 40.7589, longitude: -73.9851 },
-            fare: { totalFare: 25.50, baseFare: 5.00, distanceFare: 20.50, currency: 'INR' },
-            status: 'in_progress',
-            createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString() // 15 minutes ago
-          },
-          {
-            id: 'booking-2',
-            customerInfo: { name: 'Bob Wilson', phone: '+1234567893', email: 'bob@example.com' },
-            pickupLocation: { address: '789 Pine St, Midtown', latitude: 40.7505, longitude: -73.9934 },
-            dropoffLocation: { address: '321 Elm St, Eastside', latitude: 40.7282, longitude: -73.7949 },
-            fare: { totalFare: 18.75, baseFare: 5.00, distanceFare: 13.75, currency: 'INR' },
-            status: 'completed',
-            createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString() // 1 hour ago
-          }
-        ]
-        setBookings(mockBookings)
-        console.log('⚠️ Using mock booking data for demonstration')
+        setBookings([])
+        setError(response.error?.message || 'Failed to fetch bookings')
       }
     } catch (error) {
       console.error('❌ Error fetching bookings:', error)
@@ -588,8 +554,12 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
       const response = await comprehensiveAdminService.getEmergencyAlerts()
       
       if (response.success && response.data) {
-        // Process and enhance alert data
-        const processedAlerts = response.data.map((alert: any) => ({
+        const alertList = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.alerts)
+            ? (response.data as any).alerts
+            : []
+        const processedAlerts = alertList.map((alert: any) => ({
           ...alert,
           userInfo: {
             name: alert?.userInfo?.name || (alert as any)?.reportedBy || 'User',
@@ -611,31 +581,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         console.log('✅ Emergency alerts fetched and processed successfully:', processedAlerts.length)
       } else {
         console.error('❌ Failed to fetch emergency alerts:', response.error)
-        // Set some mock data for demonstration if API fails
-        const mockAlerts = [
-          {
-            id: 'alert-1',
-            userInfo: { name: 'Alice Johnson', phone: '+1234567894' },
-            location: { address: '456 Emergency St, Downtown', latitude: 40.7128, longitude: -74.0060 },
-            type: 'medical',
-            priority: 'high',
-            status: 'active',
-            description: 'Medical emergency - driver needs immediate assistance',
-            createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString() // 5 minutes ago
-          },
-          {
-            id: 'alert-2',
-            userInfo: { name: 'Mike Davis', phone: '+1234567895' },
-            location: { address: '789 Safety Ave, Uptown', latitude: 40.7589, longitude: -73.9851 },
-            type: 'accident',
-            priority: 'critical',
-            status: 'active',
-            description: 'Vehicle accident reported - emergency services needed',
-            createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString() // 30 minutes ago
-          }
-        ]
-        setEmergencyAlerts(mockAlerts)
-        console.log('⚠️ Using mock emergency alert data for demonstration')
+        setEmergencyAlerts([])
+        setError(response.error?.message || 'Failed to fetch emergency alerts')
       }
     } catch (error) {
       console.error('❌ Error fetching emergency alerts:', error)
@@ -654,8 +601,13 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
       const response = await comprehensiveAdminService.getSupportTickets()
       
       if (response.success && response.data) {
-        setSupportTickets(response.data)
-        console.log('✅ Support tickets fetched successfully:', response.data.length)
+        const ticketList = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray((response.data as any)?.tickets)
+            ? (response.data as any).tickets
+            : []
+        setSupportTickets(ticketList)
+        console.log('✅ Support tickets fetched successfully:', ticketList.length)
       } else {
         console.error('❌ Failed to fetch support tickets:', response.error)
         setError('Failed to fetch support tickets data')
@@ -719,6 +671,10 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
 
   // Fetch revenue data
   const fetchRevenue = useCallback(async () => {
+    if (!canViewRevenue) {
+      setRevenueData(null)
+      return
+    }
     try {
       setRevenueLoading(true)
       console.log('💰 Fetching revenue data...')
@@ -741,7 +697,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     } finally {
       setRevenueLoading(false)
     }
-  }, [])
+  }, [canViewRevenue])
 
   // Fetch verification statistics
   const fetchVerificationStats = useCallback(async () => {
@@ -766,33 +722,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     }
   }, [])
 
-  // Fetch all data
-  // ✅ NEW: Fetch cancellations
-  const fetchCancellations = useCallback(async () => {
-    try {
-      setCancellationsLoading(true)
-      console.log('🔄 Fetching cancellations...')
-      
-      const response = await comprehensiveAdminService.getCancellations({
-        limit: 10, // Get recent cancellations for widget
-        offset: 0
-      })
-      
-      if (response.success && response.data) {
-        setCancellations(response.data)
-        console.log('✅ Cancellations fetched successfully:', response.data.length)
-      } else {
-        console.error('❌ Failed to fetch cancellations:', response.error)
-        setCancellations([])
-      }
-    } catch (error) {
-      console.error('❌ Error fetching cancellations:', error)
-      setCancellations([])
-    } finally {
-      setCancellationsLoading(false)
-    }
-  }, [])
-
   const fetchAllData = useCallback(async () => {
     if (!isInitialized) return
 
@@ -809,8 +738,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         fetchSystemHealth(),
         fetchCustomers(),
         fetchRevenue(),
-        fetchCancellations(), // ✅ NEW: Fetch cancellations
-        fetchVerificationStats() // ✅ NEW: Fetch verification statistics
+        fetchVerificationStats()
       ])
       
       setLastUpdated(new Date())
@@ -822,7 +750,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     } finally {
       setIsLoading(false)
     }
-  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers, fetchCancellations, fetchVerificationStats])
+  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers, fetchRevenue, fetchVerificationStats])
 
   // Initial data fetch
   useEffect(() => {
@@ -863,15 +791,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     const suspendedCustomers = customers?.filter(c => c?.accountStatus === 'suspended').length || 0
     const bannedCustomers = customers?.filter(c => c?.accountStatus === 'banned').length || 0
 
-    // ✅ NEW: Cancellation metrics
-    const totalCancellations = cancellations?.length || 0
-    const pickupCancellations = cancellations?.filter(c => 
-      c?.cancelledAtStage === 'photo_captured' || c?.cancelledAtStage === 'driver_arrived'
-    ).length || 0
-    const driverCancellations = cancellations?.filter(c => 
-      c?.cancelledBy === 'driver'
-    ).length || 0
-
     return {
       drivers: {
         total: totalDrivers,
@@ -900,11 +819,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         suspended: suspendedCustomers,
         banned: bannedCustomers
       },
-      cancellations: { // ✅ NEW: Cancellation metrics
-        total: totalCancellations,
-        pickup: pickupCancellations,
-        byDriver: driverCancellations
-      }
     }
   }, [
     drivers?.length,
@@ -912,7 +826,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     emergencyAlerts?.length,
     supportTickets?.length,
     customers?.length,
-    cancellations?.length // ✅ NEW: Include cancellations in dependencies
   ])
 
   const handleRefresh = useCallback(async () => {
@@ -1500,6 +1413,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
           />
         </Grid>
 
+        {canViewRevenue && (
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Revenue"
@@ -1511,6 +1425,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             onClick={() => navigate('/analytics')}
           />
         </Grid>
+        )}
 
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
@@ -1521,19 +1436,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             subtitle="Real-time data"
             loading={false}
             onClick={() => navigate('/analytics')}
-          />
-        </Grid>
-
-        {/* ✅ NEW: Pickup Cancellations Metric */}
-        <Grid item xs={12} sm={6} md={3}>
-          <MetricCard
-            title="Pickup Cancellations"
-            value={metrics.cancellations?.pickup || 0}
-            icon={<ErrorIcon />}
-            color="#dc3545"
-            subtitle={`${metrics.cancellations?.total || 0} total`}
-            loading={cancellationsLoading}
-            onClick={() => navigate('/bookings?status=cancelled_at_pickup')}
           />
         </Grid>
 
@@ -1662,106 +1564,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                     )}
                   </List>
                 </Collapse>
-              </CardContent>
-            </Card>
-          </Fade>
-        </Grid>
-
-        {/* ✅ NEW: Recent Cancellations Widget */}
-        <Grid item xs={12} md={6}>
-          <Fade in={true} timeout={1200}>
-            <Card 
-              sx={{ 
-                height: '100%',
-                background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                border: '1px solid rgba(0, 0, 0, 0.05)',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-              }}
-            >
-              <CardContent sx={{ p: 3 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Typography variant="h6" fontWeight="600" color="#dc3545">
-                    Recent Cancellations
-                  </Typography>
-                  <Button
-                    size="small"
-                    onClick={() => navigate('/bookings?status=cancelled')}
-                    sx={{ color: '#dc3545' }}
-                  >
-                    View All
-                  </Button>
-                </Box>
-                {cancellationsLoading ? (
-                  <Box display="flex" justifyContent="center" p={3}>
-                    <CircularProgress size={24} />
-                  </Box>
-                ) : cancellations.length > 0 ? (
-                  <List sx={{ maxHeight: 400, overflow: 'auto' }}>
-                    {cancellations.slice(0, 5).map((cancellation: any) => (
-                      <ListItem 
-                        key={cancellation.id}
-                        sx={{ 
-                          px: 0, 
-                          py: 1.5,
-                          borderRadius: 1,
-                          '&:hover': {
-                            backgroundColor: 'rgba(220, 53, 69, 0.05)',
-                            cursor: 'pointer'
-                          }
-                        }}
-                        onClick={() => navigate(`/bookings?bookingId=${cancellation.bookingId}`)}
-                      >
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: '#dc3545', width: 40, height: 40 }}>
-                            <ErrorIcon fontSize="small" />
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Box display="flex" alignItems="center" justifyContent="space-between">
-                              <Typography variant="body2" fontWeight="600">
-                                Booking #{cancellation.bookingId?.substring(0, 8) || 'N/A'}
-                              </Typography>
-                              <Chip
-                                label={cancellation.reason === 'package_damaged' ? 'Damaged' :
-                                       cancellation.reason === 'wrong_item' ? 'Wrong Item' :
-                                       cancellation.reason === 'package_too_large' ? 'Too Large' :
-                                       cancellation.reason === 'prohibited_item' ? 'Prohibited' :
-                                       cancellation.reason === 'customer_unavailable' ? 'Unavailable' :
-                                       cancellation.reason === 'wrong_address' ? 'Wrong Address' : 'Other'}
-                                size="small"
-                                sx={{ 
-                                  bgcolor: '#dc3545',
-                                  color: 'white',
-                                  fontSize: '0.7rem',
-                                  height: 20,
-                                  fontWeight: 500
-                                }}
-                              />
-                            </Box>
-                          }
-                          secondary={
-                            <Box>
-                              <Typography variant="caption" color="textSecondary" display="block">
-                                {cancellation.cancelledBy === 'driver' ? 'Cancelled by Driver' : 
-                                 cancellation.cancelledBy === 'customer' ? 'Cancelled by Customer' : 'Cancelled by Admin'}
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary">
-                                {cancellation.cancelledAt ? new Date(cancellation.cancelledAt).toLocaleString() : 'N/A'}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                ) : (
-                  <Box textAlign="center" p={3}>
-                    <Typography variant="body2" color="textSecondary">
-                      No recent cancellations
-                    </Typography>
-                  </Box>
-                )}
               </CardContent>
             </Card>
           </Fade>

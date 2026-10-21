@@ -78,10 +78,16 @@ const WalletTransactions: React.FC = () => {
       const response = await comprehensiveAdminService.getDrivers(1, 1000)
       
       if (response.success && response.data) {
-        // Fetch transactions for all drivers
+        const driverList: Array<{ id: string; personalInfo?: { name?: string } }> = Array.isArray(
+          response.data
+        )
+          ? response.data
+          : Array.isArray((response.data as any)?.drivers)
+            ? (response.data as any).drivers
+            : []
         const allTransactions: Transaction[] = []
         
-        for (const driver of response.data) {
+        for (const driver of driverList) {
           try {
             const walletResponse = await comprehensiveAdminService.getDriverWallet?.(driver.id)
             if (walletResponse?.success && walletResponse.data?.transactions) {
@@ -100,7 +106,7 @@ const WalletTransactions: React.FC = () => {
         })
         
         setTransactions(allTransactions)
-        setDrivers(response.data.map(d => ({
+        setDrivers(driverList.map(d => ({
           id: d.id,
           name: d.personalInfo?.name || 'Unknown'
         })))

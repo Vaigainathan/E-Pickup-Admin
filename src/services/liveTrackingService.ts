@@ -411,7 +411,7 @@ class LiveTrackingService {
    */
   async getOnlineDrivers(): Promise<{ success: boolean; data?: DriverLocation[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/admin/available-drivers`, {
+      const response = await fetch(`${this.baseUrl}/api/admin/drivers?status=online&includeLocation=true`, {
         headers: {
           'Authorization': `Bearer ${await secureTokenStorage.getToken()}`,
           'Content-Type': 'application/json'

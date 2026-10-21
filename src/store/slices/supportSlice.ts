@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { SupportTicket, FilterParams, PaginationParams } from '../../types'
 import { supportService } from '../../services/supportService'
+import { mapError } from '../../services/errorHandlerService'
 
 interface SupportState {
   tickets: SupportTicket[]
@@ -28,91 +29,18 @@ const initialState: SupportState = {
   selectedTicket: null,
   loading: false,
   error: null,
-  pagination: {
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 0,
-  },
+  pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
   filters: {},
-  stats: {
-    total: 0,
-    open: 0,
-    inProgress: 0,
-    resolved: 0,
-    closed: 0,
-  },
+  stats: { total: 0, open: 0, inProgress: 0, resolved: 0, closed: 0 },
 }
 
-// Async thunks
 export const fetchSupportTickets = createAsyncThunk(
   'support/fetchTickets',
   async (params: { pagination: PaginationParams; filters: FilterParams }, { rejectWithValue }) => {
     try {
-      const response = await supportService.getSupportTickets(params.pagination)
-      return response
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const fetchTicketById = createAsyncThunk(
-  'support/fetchTicketById',
-  async (ticketId: string, { rejectWithValue }) => {
-    try {
-      const response = await supportService.getTicketById(ticketId)
-      return response
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const updateTicketStatus = createAsyncThunk(
-  'support/updateTicketStatus',
-  async (data: { ticketId: string; status: string }, { rejectWithValue }) => {
-    try {
-      const response = await supportService.updateTicketStatus(data.ticketId, data.status)
-      return { ticketId: data.ticketId, ...response }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const assignTicket = createAsyncThunk(
-  'support/assignTicket',
-  async (data: { ticketId: string; assignedTo: string }, { rejectWithValue }) => {
-    try {
-      const response = await supportService.assignTicket(data.ticketId, data.assignedTo)
-      return { ticketId: data.ticketId, ...response }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const sendMessage = createAsyncThunk(
-  'support/sendMessage',
-  async (data: { ticketId: string; message: string; attachments?: string[] }, { rejectWithValue }) => {
-    try {
-      const response = await supportService.sendMessage(data.ticketId, data.message, data.attachments)
-      return { ticketId: data.ticketId, ...response }
-    } catch (error: any) {
-      return rejectWithValue(error.message)
-    }
-  }
-)
-
-export const fetchSupportStats = createAsyncThunk(
-  'support/fetchStats',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await supportService.getSupportStats()
-      return response
-    } catch (error: any) {
-      return rejectWithValue(error.message)
+      return await supportService.getSupportTickets(params.pagination)
+    } catch (error: unknown) {
+      return rejectWithValue(mapError(error))
     }
   }
 )
@@ -139,78 +67,34 @@ const supportSlice = createSlice({
       state.stats.open += 1
     },
     updateTicketInList: (state, action: PayloadAction<SupportTicket>) => {
-      const index = state.tickets.findIndex(ticket => ticket.id === action.payload.id)
-      if (index !== -1) {
-        state.tickets[index] = action.payload
-      }
-      if (state.selectedTicket?.id === action.payload.id) {
-        state.selectedTicket = action.payload
-      }
+      const index = state.tickets.findIndex((ticket) => ticket.id === action.payload.id)
+      if (index !== -1) state.tickets[index] = action.payload
+      if (state.selectedTicket?.id === action.payload.id) state.selectedTicket = action.payload
     },
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Support Tickets
       .addCase(fetchSupportTickets.pending, (state) => {
         state.loading = true
         state.error = null
       })
       .addCase(fetchSupportTickets.fulfilled, (state, action) => {
         state.loading = false
-        state.tickets = action.payload.tickets
-        state.pagination = action.payload.pagination
+        const tickets = Array.isArray(action.payload?.tickets) ? action.payload.tickets : []
+        state.tickets = tickets
+        state.pagination = action.payload?.pagination
+          ? { ...state.pagination, ...action.payload.pagination }
+          : state.pagination
+        state.stats.total = tickets.length
+        state.stats.open = tickets.filter((t) => t.status === 'open').length
+        state.stats.inProgress = tickets.filter((t) => t.status === 'in_progress').length
+        state.stats.resolved = tickets.filter((t) => t.status === 'resolved').length
+        state.stats.closed = tickets.filter((t) => t.status === 'closed').length
         state.error = null
       })
       .addCase(fetchSupportTickets.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload as string
-      })
-      // Fetch Ticket by ID
-      .addCase(fetchTicketById.pending, (state) => {
-        state.loading = true
-        state.error = null
-      })
-      .addCase(fetchTicketById.fulfilled, (state, action) => {
-        state.loading = false
-        state.selectedTicket = action.payload
-        state.error = null
-      })
-      .addCase(fetchTicketById.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload as string
-      })
-      // Update Ticket Status
-      .addCase(updateTicketStatus.fulfilled, (state, action) => {
-        const index = state.tickets.findIndex(ticket => ticket.id === action.payload.ticketId)
-        if (index !== -1 && state.tickets[index]) {
-          state.tickets[index]!.status = action.payload.status as any
-        }
-        if (state.selectedTicket?.id === action.payload.ticketId) {
-          state.selectedTicket.status = action.payload.status as any
-        }
-      })
-      // Assign Ticket
-      .addCase(assignTicket.fulfilled, (state, action) => {
-        const index = state.tickets.findIndex(ticket => ticket.id === action.payload.ticketId)
-        if (index !== -1 && state.tickets[index]) {
-          state.tickets[index]!.assignedTo = action.payload.assignedTo
-        }
-        if (state.selectedTicket?.id === action.payload.ticketId) {
-          state.selectedTicket.assignedTo = action.payload.assignedTo
-        }
-      })
-      // Send Message
-      .addCase(sendMessage.fulfilled, (state, action) => {
-        if (state.selectedTicket?.id === action.payload.ticketId) {
-          if (!state.selectedTicket.messages) {
-            state.selectedTicket.messages = []
-          }
-          state.selectedTicket.messages.push(action.payload.message)
-        }
-      })
-      // Fetch Support Stats
-      .addCase(fetchSupportStats.fulfilled, (state, action) => {
-        state.stats = action.payload
       })
   },
 })

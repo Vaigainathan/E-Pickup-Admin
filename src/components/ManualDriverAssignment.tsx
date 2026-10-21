@@ -21,6 +21,7 @@ import {
   LocationOn as LocationIcon,
   Check as CheckIcon
 } from '@mui/icons-material';
+import { apiService } from '../services/apiService';
 
 interface Driver {
   id: string;
@@ -68,53 +69,35 @@ const ManualDriverAssignment: React.FC<ManualDriverAssignmentProps> = ({
       setIsLoading(true);
       setError(null);
 
-      // Mock data - replace with actual API call
-      const mockDrivers: Driver[] = [
-        {
-          id: '1',
-          name: 'John Smith',
-          phone: '+91 9876543210',
-          vehicleNumber: 'TN-01-AB-1234',
-          isOnline: true,
-          currentLocation: {
-            latitude: 12.9716,
-            longitude: 77.5946,
-            address: '123 Main St, Bangalore'
-          },
-          rating: 4.8,
-          totalTrips: 150
-        },
-        {
-          id: '2',
-          name: 'Mike Johnson',
-          phone: '+91 9876543211',
-          vehicleNumber: 'TN-01-CD-5678',
-          isOnline: true,
-          currentLocation: {
-            latitude: 12.9756,
-            longitude: 77.5996,
-            address: '456 Oak Ave, Bangalore'
-          },
-          rating: 4.6,
-          totalTrips: 120
-        },
-        {
-          id: '3',
-          name: 'Sarah Wilson',
-          phone: '+91 9876543212',
-          vehicleNumber: 'TN-01-EF-9012',
-          isOnline: false,
-          currentLocation: {
-            latitude: 12.9676,
-            longitude: 77.5896,
-            address: '789 Pine St, Bangalore'
-          },
-          rating: 4.9,
-          totalTrips: 200
-        }
-      ];
+      const response = await apiService.get('/api/admin/drivers', {
+        status: 'online',
+        includeLocation: true,
+        limit: 100,
+      });
 
-      setDrivers(mockDrivers);
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || 'Failed to load drivers');
+      }
+
+      const payload = response.data as { drivers?: any[] } | any[];
+      const rawDrivers = Array.isArray(payload) ? payload : payload.drivers || [];
+
+      const mapped: Driver[] = rawDrivers.map((d: any) => ({
+        id: d.id || d.uid || d.driverId,
+        name: d.name || d.personalInfo?.name || 'Driver',
+        phone: d.phone || d.personalInfo?.phone || '',
+        vehicleNumber:
+          d.vehicleNumber ||
+          d.vehicleInfo?.plateNumber ||
+          d.vehicle?.plateNumber ||
+          '',
+        isOnline: d.isOnline ?? d.status === 'online',
+        currentLocation: d.location || d.currentLocation,
+        rating: d.rating ?? 0,
+        totalTrips: d.totalTrips ?? d.totalDeliveries ?? 0,
+      }));
+
+      setDrivers(mapped.filter((d) => d.id));
     } catch (err) {
       console.error('Error loading drivers:', err);
       setError(err instanceof Error ? err.message : 'Failed to load drivers');

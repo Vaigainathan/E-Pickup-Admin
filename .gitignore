@@ -77,6 +77,8 @@ build/
 .vite/
 
 # Environment variables
+.env.staging
+.env.staging.local
 .env.local
 .env.development.local
 .env.test.local

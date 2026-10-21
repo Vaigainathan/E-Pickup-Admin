@@ -17,6 +17,7 @@ import {
   Menu,
   MenuItem,
   Badge,
+  Chip,
   Tooltip,
 } from '@mui/material'
 import {
@@ -192,7 +193,21 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {menuItems.find(item => item.path === location.pathname)?.text || 'Dashboard'}
           </Typography>
-          
+
+          {import.meta.env.MODE === 'staging' && (
+            <Chip
+              label="STAGING"
+              size="small"
+              color="warning"
+              sx={{
+                mr: 1,
+                fontWeight: 700,
+                color: 'warning.contrastText',
+              }}
+              aria-label="Staging environment"
+            />
+          )}
+
           <Tooltip title="Notifications">
             <IconButton color="inherit">
               <Badge badgeContent={getNotificationCount} color="error">

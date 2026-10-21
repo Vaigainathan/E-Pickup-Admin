@@ -35,12 +35,6 @@ export const analytics = typeof window !== 'undefined' ?
     }
   })() : null;
 
-// reCAPTCHA Configuration for Admin Dashboard
-export const recaptchaConfig = {
-  siteKey: import.meta.env.VITE_RECAPTCHA_SITE_KEY,
-  secretKey: import.meta.env.VITE_RECAPTCHA_SECRET_KEY,
-};
-
 // Initialize App Check with reCAPTCHA v3 for admin dashboard (web app)
 let appCheck: any = null;
 

@@ -377,13 +377,10 @@ const AdminManagement: React.FC = () => {
                                   />
                                 </Box>
                                 <Chip
-                                  label={admin.isEmailVerified ? 'Verified' : 'Unverified'}
-                                  color={admin.isEmailVerified ? 'success' : 'warning'}
+                                  label={admin.isActive === false ? 'Disabled' : 'Active'}
+                                  color={admin.isActive === false ? 'default' : 'success'}
                                   size="small"
                                 />
-                                <Typography variant="caption" color="text.secondary">
-                                  {(admin.permissions?.length ?? 0)} permissions
-                                </Typography>
                               </Box>
                               <Typography variant="caption" color="text.secondary" mt={1} display="block">
                                 Last Login: {admin.lastLogin 
@@ -404,7 +401,6 @@ const AdminManagement: React.FC = () => {
                           <TableRow>
                             <TableCell>Admin</TableCell>
                             <TableCell>Role</TableCell>
-                            <TableCell>Permissions</TableCell>
                             <TableCell>Last Login</TableCell>
                             <TableCell>Status</TableCell>
                             <TableCell>Actions</TableCell>
@@ -441,11 +437,6 @@ const AdminManagement: React.FC = () => {
                               </TableCell>
                               <TableCell>
                                 <Typography variant="body2">
-                                  {(admin.permissions?.length ?? 0)} permissions
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">
                                   {admin.lastLogin 
                                     ? new Date(admin.lastLogin).toLocaleDateString()
                                     : 'Never'
@@ -454,8 +445,8 @@ const AdminManagement: React.FC = () => {
                               </TableCell>
                               <TableCell>
                                 <Chip
-                                  label={admin.isEmailVerified ? 'Verified' : 'Unverified'}
-                                  color={admin.isEmailVerified ? 'success' : 'warning'}
+                                  label={admin.isActive === false ? 'Disabled' : 'Active'}
+                                  color={admin.isActive === false ? 'default' : 'success'}
                                   size="small"
                                 />
                               </TableCell>

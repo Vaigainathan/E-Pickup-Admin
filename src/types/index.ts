@@ -138,6 +138,7 @@ export interface Customer {
 
 // Booking Types
 export interface Booking {
+  sourceType?: 'parcel' | 'marketplace' | string
   id: string
   bookingId?: string // Alternative ID field
   displayId?: number // ✅ NEW: 5-digit unique display ID (Zomato-style order ID)
@@ -353,7 +354,7 @@ export interface SupportTicket {
   }
   subject: string
   description: string
-  category: 'technical' | 'billing' | 'general' | 'complaint' | 'suggestion'
+  category: 'technical' | 'billing' | 'general' | 'complaint' | 'suggestion' | 'marketplace_order' | string
   priority: 'low' | 'medium' | 'high' | 'urgent'
   status: 'open' | 'in_progress' | 'resolved' | 'closed'
   assignedTo?: string

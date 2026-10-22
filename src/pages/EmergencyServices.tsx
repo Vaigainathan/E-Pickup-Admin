@@ -26,6 +26,7 @@ import {
   Skeleton,
   Zoom,
   useMediaQuery,
+  TextField,
 } from '@mui/material'
 import {
   LocalHospital as EmergencyIcon,
@@ -73,7 +74,7 @@ interface EmergencyAlert {
     longitude: number
   }
   description: string
-  status: 'active' | 'responded' | 'resolved' | 'false_alarm'
+  status: 'active' | 'responded' | 'resolved' | 'false_alarm' | 'acknowledged'
   bookingId?: string
   response?: {
     responderId: string
@@ -105,6 +106,9 @@ const ModernEmergencyServices: React.FC = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false)
   const [snackbarMessage, setSnackbarMessage] = useState('')
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'warning' | 'info'>('info')
+  const [statusFilter, setStatusFilter] = useState<'ops' | 'all' | 'resolved'>('ops')
+  const [emergencyNote, setEmergencyNote] = useState('')
+  const [updatingAlert, setUpdatingAlert] = useState(false)
   
   // Refs for cleanup
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -211,7 +215,15 @@ const ModernEmergencyServices: React.FC = () => {
           .filter((alert): alert is EmergencyAlert => alert !== null)
         
         setAlerts(validatedAlerts)
-        setActiveAlerts(validatedAlerts.filter(alert => alert.status === 'active'))
+        setActiveAlerts(
+          validatedAlerts.filter((alert) =>
+            statusFilter === 'all'
+              ? true
+              : statusFilter === 'resolved'
+                ? alert.status === 'resolved'
+                : alert.status === 'active' || alert.status === 'acknowledged',
+          ),
+        )
         setLastRefresh(new Date())
         setRetryCount(0)
         
@@ -229,7 +241,7 @@ const ModernEmergencyServices: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [validateAlert, showSnackbar])
+  }, [validateAlert, showSnackbar, statusFilter])
 
   // Handle refresh with loading state
   const handleRefresh = useCallback(async () => {
@@ -290,6 +302,12 @@ const ModernEmergencyServices: React.FC = () => {
       return 'Invalid Date'
     }
   }, [])
+
+  useEffect(() => {
+    if (isInitialized) {
+      fetchEmergencyAlerts()
+    }
+  }, [statusFilter, isInitialized, fetchEmergencyAlerts])
 
   // Auto-refresh with cleanup
   useEffect(() => {
@@ -546,10 +564,15 @@ const ModernEmergencyServices: React.FC = () => {
 
       {/* Active Emergency Alerts */}
       <Box sx={{ mb: 4 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
           <Typography variant="h5" fontWeight="600">
-            Active Emergency Alerts ({stats.active})
+            Emergency alerts ({activeAlerts.length})
           </Typography>
+          <Box display="flex" gap={1}>
+            <Chip label="Active + acknowledged" color={statusFilter === 'ops' ? 'primary' : 'default'} onClick={() => setStatusFilter('ops')} />
+            <Chip label="Resolved" color={statusFilter === 'resolved' ? 'primary' : 'default'} onClick={() => setStatusFilter('resolved')} />
+            <Chip label="All" color={statusFilter === 'all' ? 'primary' : 'default'} onClick={() => setStatusFilter('all')} />
+          </Box>
           {isAutoRefreshEnabled && (
             <Chip
               icon={<PlayArrowIcon />}
@@ -781,7 +804,59 @@ const ModernEmergencyServices: React.FC = () => {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <TextField
+            size="small"
+            label="Note (optional)"
+            value={emergencyNote}
+            onChange={(e) => setEmergencyNote(e.target.value)}
+            sx={{ flex: 1, minWidth: 200 }}
+          />
+          {selectedAlert && selectedAlert.status === 'active' && (
+            <Button
+              variant="outlined"
+              disabled={updatingAlert}
+              onClick={async () => {
+                setUpdatingAlert(true)
+                try {
+                  await comprehensiveAdminService.updateEmergencyStatus(selectedAlert.id, 'acknowledged', emergencyNote || undefined)
+                  await fetchEmergencyAlerts()
+                  setViewDialogOpen(false)
+                  setEmergencyNote('')
+                  showSnackbar('Alert acknowledged', 'success')
+                } catch {
+                  showSnackbar('Failed to update alert', 'error')
+                } finally {
+                  setUpdatingAlert(false)
+                }
+              }}
+            >
+              Acknowledge
+            </Button>
+          )}
+          {selectedAlert && (selectedAlert.status === 'active' || selectedAlert.status === 'acknowledged') && (
+            <Button
+              variant="contained"
+              color="success"
+              disabled={updatingAlert}
+              onClick={async () => {
+                setUpdatingAlert(true)
+                try {
+                  await comprehensiveAdminService.updateEmergencyStatus(selectedAlert.id, 'resolved', emergencyNote || undefined)
+                  await fetchEmergencyAlerts()
+                  setViewDialogOpen(false)
+                  setEmergencyNote('')
+                  showSnackbar('Alert resolved', 'success')
+                } catch {
+                  showSnackbar('Failed to resolve alert', 'error')
+                } finally {
+                  setUpdatingAlert(false)
+                }
+              }}
+            >
+              Resolve
+            </Button>
+          )}
           <Button onClick={handleCloseViewDialog}>Close</Button>
         </DialogActions>
       </Dialog>

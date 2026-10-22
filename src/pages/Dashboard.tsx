@@ -1422,7 +1422,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             color={AdminColors.revenue}
             subtitle={revenueData?.thisMonth?.topUps ? `${revenueData.thisMonth.topUps} top-ups this month` : 'This month'}
             loading={revenueLoading}
-            onClick={() => navigate('/analytics')}
+            onClick={() => navigate('/revenue')}
           />
         </Grid>
         )}
@@ -1435,7 +1435,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             color={AdminColors.analytics}
             subtitle="Real-time data"
             loading={false}
-            onClick={() => navigate('/analytics')}
+            onClick={() => navigate('/revenue')}
           />
         </Grid>
 
@@ -1763,7 +1763,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                 <Button
                   variant="outlined"
                   startIcon={<AnalyticsIcon />}
-                  onClick={() => navigate('/analytics')}
+                  onClick={() => navigate('/revenue')}
                   sx={{ minWidth: 120 }}
                 >
                   Analytics

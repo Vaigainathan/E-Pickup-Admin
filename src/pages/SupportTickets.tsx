@@ -30,6 +30,11 @@ import {
   CircularProgress,
   useMediaQuery,
   Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Snackbar,
 } from '@mui/material'
 import {
   Support as SupportIcon,
@@ -45,8 +50,13 @@ import { RootState } from '../store'
 import { fetchSupportTickets, setPagination, clearError } from '../store/slices/supportSlice'
 import { SupportTicket } from '../types'
 import { supportService } from '../services/supportService'
+import { useNavigate } from 'react-router-dom'
+import { MARKETPLACE_ORDER_CATEGORY } from '../constants/marketplace'
+import { mapError } from '../services/errorHandlerService'
+import { ApiRequestError } from '../services/apiService'
 
 const SupportTickets: React.FC = () => {
+  const navigate = useNavigate()
   // Responsive hooks
   const isMobileDialog = useMediaQuery('(max-width: 600px)')
   const isMobile = useMediaQuery('(max-width: 600px)')
@@ -59,6 +69,15 @@ const SupportTickets: React.FC = () => {
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [resolutionNotes, setResolutionNotes] = useState('')
   const [resolving, setResolving] = useState(false)
+  const [replyMessage, setReplyMessage] = useState('')
+  const [replying, setReplying] = useState(false)
+  const [statusDraft, setStatusDraft] = useState('')
+  const [statusNotes, setStatusNotes] = useState('')
+  const [ticketActionError, setTicketActionError] = useState<string | null>(null)
+  const [snackbar, setSnackbar] = useState<string | null>(null)
+
+  const isMarketplaceTicket = (ticket: SupportTicket | null) =>
+    ticket?.category === MARKETPLACE_ORDER_CATEGORY
 
   useEffect(() => {
     dispatch(
@@ -84,6 +103,44 @@ const SupportTickets: React.FC = () => {
         alert(error.message || 'Failed to resolve ticket')
       } finally {
         setResolving(false)
+      }
+    }
+  }
+
+  const handleReply = async () => {
+    if (!selectedTicket || !replyMessage.trim()) return
+    setReplying(true)
+    setTicketActionError(null)
+    try {
+      await supportService.replyToTicket(selectedTicket.id, replyMessage.trim())
+      setReplyMessage('')
+      setSnackbar('Reply sent')
+      dispatch(fetchSupportTickets({ pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit }, filters }))
+    } catch (error: unknown) {
+      const code = error instanceof ApiRequestError ? error.code : undefined
+      if (code === 'USE_MARKETPLACE_HELP') {
+        setTicketActionError(mapError({ code }))
+      } else {
+        setTicketActionError(error instanceof Error ? error.message : 'Failed to send reply')
+      }
+    } finally {
+      setReplying(false)
+    }
+  }
+
+  const handleStatusUpdate = async () => {
+    if (!selectedTicket || !statusDraft) return
+    setTicketActionError(null)
+    try {
+      await supportService.updateTicketStatus(selectedTicket.id, statusDraft, statusNotes.trim() || undefined)
+      setSnackbar('Status updated')
+      dispatch(fetchSupportTickets({ pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit }, filters }))
+    } catch (error: unknown) {
+      const code = error instanceof ApiRequestError ? error.code : undefined
+      if (code === 'USE_MARKETPLACE_HELP') {
+        setTicketActionError(mapError({ code }))
+      } else {
+        setTicketActionError(error instanceof Error ? error.message : 'Failed to update status')
       }
     }
   }
@@ -508,6 +565,47 @@ const SupportTickets: React.FC = () => {
                   {selectedTicket.description}
                 </Typography>
               </Grid>
+              {isMarketplaceTicket(selectedTicket) && (
+                <Grid item xs={12}>
+                  <Alert severity="info" action={
+                    <Button color="inherit" size="small" onClick={() => { setViewDialogOpen(false); navigate('/marketplace/help') }}>
+                      Handle in Marketplace → Help
+                    </Button>
+                  }>
+                    Marketplace order tickets are managed in Marketplace Help.
+                  </Alert>
+                </Grid>
+              )}
+              {!isMarketplaceTicket(selectedTicket) && (
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>Reply</Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  placeholder="Message to customer (max 1000 chars)"
+                />
+                <Button sx={{ mt: 1 }} variant="contained" disabled={replying || !replyMessage.trim()} onClick={handleReply}>
+                  Send reply
+                </Button>
+                <Box mt={2}>
+                  <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                    <InputLabel>Update status</InputLabel>
+                    <Select label="Update status" value={statusDraft} onChange={(e) => setStatusDraft(e.target.value)}>
+                      <MenuItem value="open">open</MenuItem>
+                      <MenuItem value="in_progress">in_progress</MenuItem>
+                      <MenuItem value="resolved">resolved</MenuItem>
+                      <MenuItem value="closed">closed</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField fullWidth size="small" label="Admin notes" value={statusNotes} onChange={(e) => setStatusNotes(e.target.value)} sx={{ mb: 1 }} />
+                  <Button variant="outlined" disabled={!statusDraft} onClick={handleStatusUpdate}>Update status</Button>
+                </Box>
+                {ticketActionError && <Alert severity="error" sx={{ mt: 1 }}>{ticketActionError}</Alert>}
+              </Grid>
+              )}
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom>Messages</Typography>
                 <List>
@@ -540,7 +638,7 @@ const SupportTickets: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
-          {selectedTicket && selectedTicket.status !== 'resolved' && selectedTicket.status !== 'closed' && (
+          {selectedTicket && !isMarketplaceTicket(selectedTicket) && selectedTicket.status !== 'resolved' && selectedTicket.status !== 'closed' && (
             <Button
               variant="contained"
               color="success"
@@ -554,6 +652,8 @@ const SupportTickets: React.FC = () => {
           )}
         </DialogActions>
       </Dialog>
+
+      <Snackbar open={Boolean(snackbar)} autoHideDuration={4000} onClose={() => setSnackbar(null)} message={snackbar} />
 
       {/* Resolve Ticket Dialog */}
       <Dialog open={resolveDialogOpen} onClose={() => setResolveDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>

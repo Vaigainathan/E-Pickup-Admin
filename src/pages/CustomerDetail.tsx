@@ -33,6 +33,8 @@ import {
   MenuItem,
   Paper,
   IconButton,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material'
 import {
   Person as PersonIcon,
@@ -53,6 +55,9 @@ import {
   FilterList as FilterListIcon,
 } from '@mui/icons-material'
 import { customerService } from '../services/customerService'
+import { marketplaceAdminService } from '../services/marketplaceAdminService'
+import { mapError } from '../services/errorHandlerService'
+import { ApiRequestError } from '../services/apiService'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Booking } from '../types'
 
@@ -72,7 +77,16 @@ interface Customer {
   createdAt?: Date
   updatedAt?: Date
   bookingsCount?: number
-  // No wallet system for customers
+  customer?: {
+    marketplace?: {
+      restriction?: {
+        active: boolean
+        reason?: string | null
+        setAt?: string | Date | null
+        setBy?: string | null
+      } | null
+    }
+  }
 }
 
 const CustomerDetail: React.FC = () => {
@@ -101,6 +115,8 @@ const CustomerDetail: React.FC = () => {
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false)
   // Wallet-related state removed - no wallet system for customers
   const [actionReason, setActionReason] = useState('')
+  const [marketplaceDialogOpen, setMarketplaceDialogOpen] = useState(false)
+  const [marketplaceForce, setMarketplaceForce] = useState(false)
 
   // Load customer data
   const loadCustomer = async () => {
@@ -397,6 +413,31 @@ const CustomerDetail: React.FC = () => {
           <CardContent>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
+                <Card variant="outlined" sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>Marketplace access</Typography>
+                    {customer.customer?.marketplace?.restriction?.active ? (
+                      <>
+                        <Chip color="warning" label="Restricted" sx={{ mb: 1 }} />
+                        <Typography variant="body2">Reason: {customer.customer.marketplace.restriction.reason || '—'}</Typography>
+                        <Button sx={{ mt: 2 }} variant="outlined" onClick={async () => {
+                          try {
+                            await marketplaceAdminService.unrestrictCustomer(customer.id)
+                            await loadCustomer()
+                          } catch (err: unknown) {
+                            setError(mapError({ code: (err as ApiRequestError)?.code }))
+                          }
+                        }}>
+                          Unrestrict marketplace
+                        </Button>
+                      </>
+                    ) : (
+                      <Button variant="outlined" color="warning" onClick={() => setMarketplaceDialogOpen(true)}>
+                        Restrict marketplace
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="h6" gutterBottom>
@@ -762,6 +803,45 @@ const CustomerDetail: React.FC = () => {
             variant="contained"
           >
             {customer.accountStatus === 'suspended' ? 'Unsuspend' : 'Suspend'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={marketplaceDialogOpen} onClose={() => setMarketplaceDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobileDialog}>
+        <DialogTitle>Restrict marketplace access</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            required
+            label="Reason"
+            value={actionReason}
+            onChange={(e) => setActionReason(e.target.value)}
+            margin="normal"
+          />
+          <FormControlLabel
+            control={<Checkbox checked={marketplaceForce} onChange={(e) => setMarketplaceForce(e.target.checked)} />}
+            label="Force overwrite existing snapshot (SNAPSHOT_EXISTS)"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMarketplaceDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={!actionReason.trim()}
+            onClick={async () => {
+              try {
+                await marketplaceAdminService.restrictCustomer(customer.id, actionReason.trim(), marketplaceForce)
+                setMarketplaceDialogOpen(false)
+                setActionReason('')
+                setMarketplaceForce(false)
+                await loadCustomer()
+              } catch (err: unknown) {
+                setError(mapError({ code: (err as ApiRequestError)?.code }))
+              }
+            }}
+          >
+            Restrict
           </Button>
         </DialogActions>
       </Dialog>

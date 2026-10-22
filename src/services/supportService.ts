@@ -59,6 +59,31 @@ class SupportService {
     )
   }
 
+  async replyToTicket(ticketId: string, message: string): Promise<void> {
+    const response = await apiService.post(`/api/admin/support/tickets/${ticketId}/reply`, { message })
+    if (response.success) return
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
+  }
+
+  async updateTicketStatus(
+    ticketId: string,
+    status: string,
+    adminNotes?: string,
+  ): Promise<void> {
+    const response = await apiService.put(`/api/admin/support/tickets/${ticketId}/status`, {
+      status,
+      adminNotes,
+    })
+    if (response.success) return
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
+  }
+
   async resolveTicket(ticketId: string, resolution: string): Promise<{ message: string }> {
     const response = await apiService.post(`/api/admin/support/tickets/${ticketId}/resolve`, {
       resolution,

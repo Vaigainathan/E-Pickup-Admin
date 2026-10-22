@@ -13,6 +13,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  ListSubheader,
   Avatar,
   Menu,
   MenuItem,
@@ -32,6 +33,10 @@ import {
   Analytics as AnalyticsIcon,
   Settings as SettingsIcon,
   AdminPanelSettings as AdminPanelIcon,
+  Storefront as StorefrontIcon,
+  Receipt as ReceiptIcon,
+  HelpOutline as HelpOutlineIcon,
+  AttachMoney as RevenueIcon,
   Notifications as NotificationsIcon,
   AccountCircle as AccountCircleIcon,
   Logout as LogoutIcon,
@@ -50,7 +55,9 @@ interface LayoutProps {
   children: React.ReactNode
 }
 
-const menuItems = [
+type MenuEntry = { text: string; icon: React.ReactNode; path: string; section?: string }
+
+const menuItems: MenuEntry[] = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Driver Management', icon: <PeopleIcon />, path: '/drivers' },
   { text: 'Customer Management', icon: <PeopleIcon />, path: '/customers' },
@@ -59,6 +66,10 @@ const menuItems = [
   { text: 'Emergency Services', icon: <EmergencyIcon />, path: '/emergency' },
   { text: 'Support Tickets', icon: <SupportIcon />, path: '/support' },
   { text: 'System Monitoring', icon: <MonitorIcon />, path: '/monitoring' },
+  { text: 'Shops', icon: <StorefrontIcon />, path: '/marketplace/shops', section: 'Marketplace' },
+  { text: 'Orders', icon: <ReceiptIcon />, path: '/marketplace/orders', section: 'Marketplace' },
+  { text: 'Help', icon: <HelpOutlineIcon />, path: '/marketplace/help', section: 'Marketplace' },
+  { text: 'Revenue', icon: <RevenueIcon />, path: '/revenue' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
   { text: 'Admin Management', icon: <AdminPanelIcon />, path: '/admin-management' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
@@ -121,10 +132,16 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
       </Toolbar>
       <Divider />
       <List role="list" aria-label="Navigation menu">
-        {visibleMenuItems.map((item) => (
-          <ListItem key={item.text} disablePadding role="listitem">
+        {visibleMenuItems.map((item, index) => (
+          <React.Fragment key={item.path}>
+            {item.section && (index === 0 || visibleMenuItems[index - 1]?.section !== item.section) && (
+              <ListSubheader component="div" sx={{ lineHeight: 2 }}>
+                {item.section}
+              </ListSubheader>
+            )}
+          <ListItem disablePadding role="listitem">
             <ListItemButton
-              selected={location.pathname === item.path}
+              selected={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)}
               onClick={() => handleNavigation(item.path)}
               aria-label={`Navigate to ${item.text}`}
               aria-current={location.pathname === item.path ? 'page' : undefined}
@@ -170,6 +187,7 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
               <ListItemText primary={item.text} />
             </ListItemButton>
           </ListItem>
+          </React.Fragment>
         ))}
       </List>
     </div>

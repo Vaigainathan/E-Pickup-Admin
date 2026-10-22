@@ -20,6 +20,12 @@ const LiveTracking = lazy(() => import('./pages/LiveTracking'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const Settings = lazy(() => import('./pages/Settings'))
 const AdminManagement = lazy(() => import('./pages/AdminManagement'))
+const RevenueDashboard = lazy(() => import('./pages/RevenueDashboard'))
+const MarketplaceShops = lazy(() => import('./pages/marketplace/MarketplaceShops'))
+const MarketplaceShopDetail = lazy(() => import('./pages/marketplace/MarketplaceShopDetail'))
+const MarketplaceOrders = lazy(() => import('./pages/marketplace/MarketplaceOrders'))
+const MarketplaceOrderDetail = lazy(() => import('./pages/marketplace/MarketplaceOrderDetail'))
+const MarketplaceHelp = lazy(() => import('./pages/marketplace/MarketplaceHelp'))
 
 const PageLoader = () => (
   <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -59,6 +65,11 @@ function App() {
             <Route path="/support" element={<ErrorBoundary><SupportTickets /></ErrorBoundary>} />
             <Route path="/live-tracking" element={<ErrorBoundary><LiveTracking /></ErrorBoundary>} />
             <Route path="/monitoring" element={<ErrorBoundary><SystemMonitoring /></ErrorBoundary>} />
+            <Route path="/marketplace/shops" element={<ErrorBoundary><MarketplaceShops /></ErrorBoundary>} />
+            <Route path="/marketplace/shops/:shopId" element={<ErrorBoundary><MarketplaceShopDetail /></ErrorBoundary>} />
+            <Route path="/marketplace/orders" element={<ErrorBoundary><MarketplaceOrders /></ErrorBoundary>} />
+            <Route path="/marketplace/orders/:orderId" element={<ErrorBoundary><MarketplaceOrderDetail /></ErrorBoundary>} />
+            <Route path="/marketplace/help" element={<ErrorBoundary><MarketplaceHelp /></ErrorBoundary>} />
             <Route
               path="/analytics"
               element={
@@ -80,6 +91,14 @@ function App() {
               element={
                 <SuperAdminRoute>
                   <ErrorBoundary><AdminManagement /></ErrorBoundary>
+                </SuperAdminRoute>
+              }
+            />
+            <Route
+              path="/revenue"
+              element={
+                <SuperAdminRoute>
+                  <ErrorBoundary><RevenueDashboard /></ErrorBoundary>
                 </SuperAdminRoute>
               }
             />

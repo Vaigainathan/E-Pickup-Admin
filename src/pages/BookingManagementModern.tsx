@@ -382,6 +382,10 @@ const ModernBookingManagement: React.FC = React.memo(() => {
 
   // Enhanced UI states
   const [searchQuery, setSearchQuery] = useState('')
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<'' | 'parcel' | 'marketplace'>('')
+  const [bookingsOffset, setBookingsOffset] = useState(0)
+  const [hasMoreBookings, setHasMoreBookings] = useState(false)
+  const BOOKINGS_PAGE_SIZE = 20
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table')
   // const [tabValue, setTabValue] = useState(0)
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -513,7 +517,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         // Setup real-time event listeners
         const handleBookingUpdate = (event: CustomEvent) => {
           console.log('📦 Booking update received:', event.detail)
-          fetchBookings()
+          fetchBookings({ offset: 0, append: false })
         }
         
         window.addEventListener('bookingUpdate', handleBookingUpdate as any)
@@ -533,12 +537,17 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   }, [])
 
   // Fetch bookings
-  const fetchBookings = useCallback(async () => {
+  const fetchBookings = useCallback(async (options: { offset: number; append: boolean }) => {
+    const { offset, append } = options
     try {
       setBookingsLoading(true)
-      console.log('🔄 Fetching bookings...')
+      console.log('🔄 Fetching bookings...', { offset, append })
       
-      const response = await comprehensiveAdminService.getBookings()
+      const response = await comprehensiveAdminService.getBookings({
+        limit: BOOKINGS_PAGE_SIZE,
+        offset,
+        sourceType: sourceTypeFilter || undefined,
+      })
       
       if (response.success && response.data) {
         const bookingsData = response.data as any[]
@@ -674,7 +683,9 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           }
         })
         
-        setBookings(normalizedBookings)
+        setBookings((prev) => (append ? [...prev, ...normalizedBookings] : normalizedBookings))
+        setBookingsOffset(offset)
+        setHasMoreBookings(normalizedBookings.length >= BOOKINGS_PAGE_SIZE)
         
         // Categorize bookings for better management
         const active = normalizedBookings.filter(booking => 
@@ -708,20 +719,21 @@ const ModernBookingManagement: React.FC = React.memo(() => {
     } finally {
       setBookingsLoading(false)
     }
-  }, [])
+  }, [sourceTypeFilter])
 
   // Initial data fetch
   useEffect(() => {
     if (isInitialized) {
-      fetchBookings()
+      setBookingsOffset(0)
+      fetchBookings({ offset: 0, append: false })
     }
-  }, [isInitialized, fetchBookings])
+  }, [isInitialized, sourceTypeFilter, fetchBookings])
 
   // Auto refresh
   useEffect(() => {
     if (autoRefresh && isInitialized) {
       const interval = setInterval(() => {
-        fetchBookings()
+        fetchBookings({ offset: 0, append: false })
       }, refreshInterval)
       return () => clearInterval(interval)
     }
@@ -754,7 +766,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       console.log('✅ Booking status updated successfully')
       
       // Refresh bookings to get latest data
-      setTimeout(() => fetchBookings(), 500)
+      setTimeout(() => fetchBookings({ offset: 0, append: false }), 500)
     } catch (error) {
       console.error('❌ Error updating booking status:', error)
       addNotification('Failed to update booking status', 'error')
@@ -790,7 +802,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       console.log('✅ Booking deleted successfully')
       
       // Refresh bookings to get latest data
-      setTimeout(() => fetchBookings(), 500)
+      setTimeout(() => fetchBookings({ offset: 0, append: false }), 500)
     } catch (error) {
       console.error('❌ Error deleting booking:', error)
       addNotification('Failed to delete booking', 'error')
@@ -801,7 +813,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
-    fetchBookings()
+    fetchBookings({ offset: 0, append: false })
   }, [fetchBookings])
 
   // Helper functions
@@ -1302,6 +1314,28 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                 }}
               />
             </Grid>
+            <Grid item xs={12} md={3}>
+              <Box display="flex" gap={1} flexWrap="wrap" alignItems="center" height="100%">
+                <Chip
+                  label="All sources"
+                  color={sourceTypeFilter === '' ? 'primary' : 'default'}
+                  onClick={() => setSourceTypeFilter('')}
+                  variant={sourceTypeFilter === '' ? 'filled' : 'outlined'}
+                />
+                <Chip
+                  label="Parcel"
+                  color={sourceTypeFilter === 'parcel' ? 'primary' : 'default'}
+                  onClick={() => setSourceTypeFilter('parcel')}
+                  variant={sourceTypeFilter === 'parcel' ? 'filled' : 'outlined'}
+                />
+                <Chip
+                  label="Marketplace"
+                  color={sourceTypeFilter === 'marketplace' ? 'primary' : 'default'}
+                  onClick={() => setSourceTypeFilter('marketplace')}
+                  variant={sourceTypeFilter === 'marketplace' ? 'filled' : 'outlined'}
+                />
+              </Box>
+            </Grid>
             <Grid item xs={12} md={2}>
               <FormControl fullWidth>
                 <InputLabel>Status</InputLabel>
@@ -1472,6 +1506,18 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           <AlertTitle>Error</AlertTitle>
           {error}
         </Alert>
+      )}
+
+      {hasMoreBookings && (
+        <Box textAlign="center" sx={{ mb: 3 }}>
+          <Button
+            variant="outlined"
+            disabled={bookingsLoading}
+            onClick={() => fetchBookings({ offset: bookingsOffset + BOOKINGS_PAGE_SIZE, append: true })}
+          >
+            Load more bookings
+          </Button>
+        </Box>
       )}
 
       {/* Loading State */}
@@ -2512,7 +2558,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         }}
         onSuccess={() => {
           // Refresh bookings after successful intervention
-          fetchBookings()
+          fetchBookings({ offset: 0, append: false })
           setViewDialogOpen(false)
         }}
       />

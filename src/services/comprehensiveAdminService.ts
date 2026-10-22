@@ -1,25 +1,7 @@
 import { apiService } from './apiService'
-import { db, storage } from '../config/firebase'
 import { realTimeService } from './realTimeService'
+import { emergencyService } from './emergencyService'
 import { Driver, Booking, EmergencyAlert, SupportTicket, SystemHealth, Customer } from '../types'
-import { 
-  collection, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
-  doc as firestoreDoc, 
-  getDoc, 
-  onSnapshot, 
-  Unsubscribe,
-  // Timestamp // Removed unused import 
-} from 'firebase/firestore'
-import { 
-  ref, 
-  getDownloadURL, 
-  listAll, 
-  getMetadata 
-} from 'firebase/storage'
 
 interface AdminServiceResponse<T = any> {
   success: boolean
@@ -314,16 +296,32 @@ class ComprehensiveAdminService {
   }
 
   // Booking Management
-  async getBookings(): Promise<AdminServiceResponse<Booking[]>> {
+  async getBookings(params?: {
+    limit?: number
+    offset?: number
+    sourceType?: 'parcel' | 'marketplace' | ''
+    status?: string
+    dateFrom?: string
+    dateTo?: string
+  }): Promise<AdminServiceResponse<Booking[]>> {
     try {
       console.log('🌐 Fetching bookings from backend...')
-      const response = await apiService.get('/api/admin/bookings')
+      const response = await apiService.get('/api/admin/bookings', {
+        limit: params?.limit ?? 20,
+        offset: params?.offset ?? 0,
+        sourceType: params?.sourceType || undefined,
+        status: params?.status || undefined,
+        dateFrom: params?.dateFrom || undefined,
+        dateTo: params?.dateTo || undefined,
+      })
       
       if (response.success && response.data) {
         console.log('✅ Bookings fetched successfully')
+        const data = response.data
+        const list = Array.isArray(data) ? data : (data as { bookings?: Booking[] }).bookings || []
         return {
           success: true,
-          data: (response.data as Booking[]) || [],
+          data: list,
           message: 'Bookings fetched successfully'
         }
       }
@@ -864,16 +862,23 @@ class ComprehensiveAdminService {
     }
   }
 
-  async getRevenueStats(): Promise<AdminServiceResponse<any>> {
+  async getRevenueStats(startDate?: string, endDate?: string): Promise<AdminServiceResponse<any>> {
     try {
       console.log('💰 Fetching revenue statistics from backend...')
-      const response = await apiService.get('/api/admin/revenue/stats')
+      const response = await apiService.get('/api/admin/revenue/stats', {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      })
       
-      if (response.success && response.data) {
+      const stats = (response as { stats?: unknown }).stats
+        ?? (response.data as { stats?: unknown })?.stats
+        ?? response.data
+
+      if (response.success && stats) {
         console.log('✅ Revenue statistics fetched successfully')
         return {
           success: true,
-          data: response.data,
+          data: stats,
           message: 'Revenue statistics fetched successfully'
         }
       }
@@ -1110,229 +1115,6 @@ class ComprehensiveAdminService {
     }
   }
 
-  // Debug method to check document flow
-  async debugDriverDocuments(driverId: string): Promise<AdminServiceResponse<any>> {
-    try {
-      console.log(`🔍 Debug: Checking document flow for driver: ${driverId}`)
-      
-      // Try backend debug endpoint
-      try {
-        const response = await apiService.get(`/api/admin/debug/documents/${driverId}`)
-        if (response.success && response.data) {
-          console.log('🔍 Backend debug info:', response.data)
-          return {
-            success: true,
-            data: response.data,
-            message: 'Debug information retrieved from backend'
-          }
-        }
-      } catch (apiError) {
-        console.warn('⚠️ Backend debug failed:', apiError)
-      }
-      
-      // Fallback to Firestore debug
-      
-      // Get driver info
-      const driverDocRef = firestoreDoc(db, 'users', driverId)
-      const driverDocSnapshot = await getDoc(driverDocRef)
-      const driverDoc = driverDocSnapshot.exists() ? driverDocSnapshot.data() : null
-      
-      // Get verification requests
-      const verificationQuery = query(
-        collection(db, 'documentVerificationRequests'),
-        where('driverId', '==', driverId),
-        orderBy('requestedAt', 'desc')
-      )
-      const verificationSnapshot = await getDocs(verificationQuery)
-      
-      // Get driver documents
-      const driverDocsQuery = query(
-        collection(db, 'driverDocuments'),
-        where('driverId', '==', driverId)
-      )
-      const driverDocsSnapshot = await getDocs(driverDocsQuery)
-      
-      const debugInfo = {
-        driverId,
-        driverName: (driverDoc as any)?.name,
-        driverPhone: (driverDoc as any)?.phone,
-        verificationStatus: (driverDoc as any)?.driver?.verificationStatus,
-        userCollectionDocuments: (driverDoc as any)?.driver?.documents || (driverDoc as any)?.documents || {},
-        verificationRequests: verificationSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })),
-        driverDocumentsCollection: driverDocsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })),
-        timestamp: new Date().toISOString()
-      }
-      
-      console.log('🔍 Firestore debug info:', debugInfo)
-      
-      return {
-        success: true,
-        data: debugInfo,
-        message: 'Debug information retrieved from Firestore'
-      }
-      
-    } catch (error) {
-      console.error('❌ Debug error:', error)
-      return {
-        success: false,
-        error: {
-          code: 'DEBUG_ERROR',
-          message: 'Failed to retrieve debug information'
-        }
-      }
-    }
-  }
-
-  // Enhanced Firebase Document Verification Methods with Proper Folder Structure
-  async getDriverDocumentsLegacy(driverId: string): Promise<AdminServiceResponse<any>> {
-    try {
-      console.log(`📄 Fetching documents for driver: ${driverId}`)
-      
-      // ✅ CRITICAL FIX: Get driver document from correct collection (users, not drivers)
-      const driverDoc = await getDoc(firestoreDoc(db, 'users', driverId))
-      if (!driverDoc.exists()) {
-        return {
-          success: false,
-          error: {
-            code: 'DRIVER_NOT_FOUND',
-            message: 'Driver not found'
-          }
-        }
-      }
-      
-      const driverData = driverDoc.data()
-      const documents: any = {}
-      
-      // ✅ CRITICAL FIX: Define document types matching backend structure
-      const documentTypes = [
-        { type: 'drivingLicense', folder: 'driving_license', patterns: ['driving_license', 'license', 'driving', 'dl'] },
-        { type: 'bikeInsurance', folder: 'bike_insurance', patterns: ['bike_insurance', 'insurance', 'policy', 'coverage'] },
-        { type: 'rcBook', folder: 'rc_book', patterns: ['rc_book', 'registration', 'rc', 'vehicle'] },
-        { type: 'aadhaarCard', folder: 'aadhaar_card', patterns: ['aadhaar_card', 'identity', 'id', 'aadhar', 'pan'] },
-        { type: 'profilePhoto', folder: 'profile_photo', patterns: ['profile_photo', 'profile', 'photo', 'picture'] }
-      ]
-      
-      // Check each document type folder
-      for (const docType of documentTypes) {
-        try {
-          const docTypeRef = ref(storage, `drivers/${driverId}/documents/${docType.folder}`)
-          const listResult = await listAll(docTypeRef)
-          
-          if (listResult.items.length > 0) {
-            // Get the most recent document (assuming multiple versions)
-            const latestDoc = listResult.items.sort((a, b) => 
-              b.name.localeCompare(a.name)
-            )[0]
-            
-            const downloadURL = await getDownloadURL(latestDoc!)
-            const metadata = await getMetadata(latestDoc!)
-            
-            documents[docType.type] = {
-              url: downloadURL,
-              fileName: latestDoc?.name || "unknown",
-              uploadedAt: metadata.timeCreated,
-              size: metadata.size,
-              contentType: metadata.contentType,
-              status: driverData?.driver?.documents?.[docType.type]?.status || driverData?.documents?.[docType.type]?.status || 'pending',
-              verified: driverData?.driver?.documents?.[docType.type]?.verified || driverData?.documents?.[docType.type]?.verified || false,
-              verificationNotes: driverData?.driver?.documents?.[docType.type]?.verificationNotes || driverData?.documents?.[docType.type]?.verificationNotes || '',
-              folder: docType.folder,
-              allVersions: listResult.items.map(item => ({
-                name: item.name,
-                path: item.fullPath
-              }))
-            }
-          }
-        } catch (folderError) {
-          console.log(`⚠️ No documents found in ${docType.folder} folder for driver ${driverId}`)
-        }
-      }
-      
-      // ✅ CRITICAL FIX: Only check the correct storage path (no legacy needed)
-      const correctPath = `drivers/${driverId}/documents`;
-      
-      try {
-        console.log(`🔍 Checking correct path: ${correctPath}`);
-        const legacyDocumentsRef = ref(storage, correctPath)
-        const legacyListResult = await listAll(legacyDocumentsRef)
-        
-        for (const itemRef of legacyListResult.items) {
-          const fileName = itemRef.name
-          const downloadURL = await getDownloadURL(itemRef)
-          const metadata = await getMetadata(itemRef)
-          
-          // Determine document type from filename for legacy documents
-          let docType = 'other'
-          for (const docTypeConfig of documentTypes) {
-            if (docTypeConfig.patterns.some(pattern => 
-              fileName.toLowerCase().includes(pattern)
-            )) {
-              docType = docTypeConfig.type
-              break
-            }
-          }
-          
-          // Only add if we don't already have this document type
-          if (!documents[docType]) {
-            documents[docType] = {
-              url: downloadURL,
-              fileName: fileName,
-              uploadedAt: metadata.timeCreated,
-              size: metadata.size,
-              contentType: metadata.contentType,
-              status: driverData?.driver?.documents?.[docType]?.status || driverData?.documents?.[docType]?.status || 'pending',
-              verified: driverData?.driver?.documents?.[docType]?.verified || driverData?.documents?.[docType]?.verified || false,
-              verificationNotes: driverData?.driver?.documents?.[docType]?.verificationNotes || driverData?.documents?.[docType]?.verificationNotes || '',
-              folder: 'documents',
-              isLegacy: false,
-              sourcePath: correctPath
-            }
-          }
-        }
-        
-        console.log(`✅ Found ${legacyListResult.items.length} documents in correct path: ${correctPath}`);
-      } catch (pathError) {
-        console.log(`⚠️ No documents found in correct path: ${correctPath}`);
-      }
-      
-      // Fallback to Firestore document data if no storage documents found
-      if (Object.keys(documents).length === 0 && driverData?.documents) {
-        console.log('📄 Using Firestore document data as fallback')
-        Object.assign(documents, driverData.documents)
-      }
-      
-      console.log(`✅ Fetched ${Object.keys(documents).length} documents for driver ${driverId}`)
-      return {
-        success: true,
-        data: {
-          driverId,
-          driverName: driverData?.personalInfo?.name || driverData?.name || 'Unknown',
-          documents,
-          folderStructure: {
-            basePath: `drivers/${driverId}`,
-            documentTypes: documentTypes.map(dt => dt.folder)
-          }
-        },
-        message: 'Driver documents fetched successfully'
-      }
-    } catch (error) {
-      console.error('❌ Error fetching driver documents:', error)
-      return {
-        success: false,
-        error: {
-          code: 'FETCH_DOCUMENTS_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to fetch driver documents'
-        }
-      }
-    }
-  }
-
   async verifyDriverDocument(
     driverId: string, 
     documentType: string, 
@@ -1497,44 +1279,6 @@ class ComprehensiveAdminService {
     }
   }
 
-  // Helper method to determine document type from filename and folder
-
-  // Real-time driver updates
-  subscribeToDriverUpdates(callback: (drivers: Driver[]) => void): Unsubscribe {
-    const driversRef = collection(db, 'drivers')
-    const q = query(driversRef, orderBy('createdAt', 'desc'))
-    
-    return onSnapshot(q, (snapshot) => {
-      const drivers: Driver[] = []
-      snapshot.forEach((doc) => {
-        const data = doc.data()
-        drivers.push({
-          id: doc.id,
-          ...data,
-          personalInfo: {
-            name: data?.personalInfo?.name || data?.name || 'Driver',
-            email: data?.personalInfo?.email || data?.email || '',
-            phone: data?.personalInfo?.phone || data?.phone || '',
-            dateOfBirth: data?.personalInfo?.dateOfBirth || data?.dateOfBirth || '',
-            address: data?.personalInfo?.address || data?.address || ''
-          },
-          vehicleInfo: {
-            make: data?.vehicleInfo?.make || data?.vehicle?.make || 'Unknown',
-            model: data?.vehicleInfo?.model || data?.vehicle?.model || 'Unknown',
-            year: data?.vehicleInfo?.year || data?.vehicle?.year || new Date().getFullYear(),
-            color: data?.vehicleInfo?.color || data?.vehicle?.color || 'Unknown',
-            plateNumber: data?.vehicleInfo?.plateNumber || data?.vehicle?.plateNumber || 'Unknown'
-          },
-          createdAt: data?.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
-        } as Driver)
-      })
-      
-      callback(drivers)
-    })
-  }
-
-
   async respondToEmergency(_alertId: string, _response: any): Promise<AdminServiceResponse> {
     return {
       success: false,
@@ -1545,35 +1289,24 @@ class ComprehensiveAdminService {
     }
   }
 
-  async updateEmergencyStatus(_alertId: string, _status: string): Promise<AdminServiceResponse> {
-    return {
-      success: false,
-      error: {
-        code: 'NOT_SUPPORTED',
-        message: 'Emergency status updates are not available in the admin API.',
-      },
+  async updateEmergencyStatus(
+    alertId: string,
+    status: 'acknowledged' | 'resolved',
+    note?: string,
+  ): Promise<AdminServiceResponse> {
+    try {
+      await emergencyService.updateAlertStatus(alertId, status, note)
+      return { success: true, message: 'Emergency alert updated' }
+    } catch (error: unknown) {
+      const code = (error as { code?: string })?.code || 'UPDATE_ALERT_STATUS_ERROR'
+      return {
+        success: false,
+        error: {
+          code,
+          message: error instanceof Error ? error.message : 'Failed to update emergency alert',
+        },
+      }
     }
-  }
-
-  // Real-time emergency alerts
-  subscribeToEmergencyAlerts(callback: (alerts: any[]) => void): Unsubscribe {
-    const alertsRef = collection(db, 'emergencyAlerts')
-    const q = query(alertsRef, orderBy('createdAt', 'desc'))
-    
-    return onSnapshot(q, (snapshot) => {
-      const alerts: any[] = []
-      snapshot.forEach((doc) => {
-        const data = doc.data()
-        alerts.push({
-          id: doc.id,
-          ...data,
-          createdAt: data?.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
-        })
-      })
-      
-      callback(alerts)
-    })
   }
 
   // ✅ NEW: Cancellation management methods

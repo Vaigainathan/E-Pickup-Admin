@@ -134,6 +134,24 @@ class ErrorHandlerService {
       retryable: false,
       action: 'Please refresh the page'
     },
+    'USE_MARKETPLACE_HELP': {
+      code: 'USE_MARKETPLACE_HELP',
+      message: 'This is a marketplace order ticket. Handle it under Marketplace → Help.',
+      severity: 'info',
+      retryable: false,
+    },
+    'SNAPSHOT_EXISTS': {
+      code: 'SNAPSHOT_EXISTS',
+      message: 'A marketplace restore snapshot already exists. Use force only if you intend to overwrite it.',
+      severity: 'warning',
+      retryable: false,
+    },
+    'SNAPSHOT_MISSING': {
+      code: 'SNAPSHOT_MISSING',
+      message: 'No marketplace snapshot is available to restore this customer.',
+      severity: 'error',
+      retryable: false,
+    },
     'DUPLICATE_ENTRY': {
       code: 'DUPLICATE_ENTRY',
       message: 'This item already exists.',

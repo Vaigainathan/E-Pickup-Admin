@@ -4,6 +4,7 @@ export const SUPER_ADMIN_ROUTES = [
   '/admin-management',
   '/settings',
   '/analytics',
+  '/revenue',
 ] as const
 
 export function isSuperAdmin(role: AdminRole | string | undefined | null): boolean {

@@ -88,6 +88,24 @@ class EmergencyService {
     )
   }
 
+  async updateAlertStatus(
+    alertId: string,
+    status: 'acknowledged' | 'resolved',
+    note?: string,
+  ): Promise<unknown> {
+    const response = await apiService.put(`/api/admin/emergency/alerts/${alertId}/status`, {
+      status,
+      note,
+    })
+    if (response.success) {
+      return response.data
+    }
+    throw new ApiRequestError(
+      response.error?.code || 'UNKNOWN_ERROR',
+      mapError({ code: response.error?.code }),
+    )
+  }
+
   async contactServices(payload: Record<string, unknown>): Promise<any> {
     const response = await apiService.post('/api/admin/emergency/contact-services', payload)
     if (response.success) return response.data

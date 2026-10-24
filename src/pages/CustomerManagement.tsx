@@ -21,8 +21,6 @@ import {
   TableHead,
   TableRow,
   Pagination,
-  Alert,
-  CircularProgress,
   FormControl,
   InputLabel,
   Select,
@@ -52,6 +50,7 @@ import { customerService } from '../services/customerService'
 import { useNavigate } from 'react-router-dom'
 import { websocketService } from '../services/websocketService'
 import { secureTokenStorage } from '../services/secureTokenStorage'
+import AdminFetchState from '../components/AdminFetchState'
 
 interface Customer {
   id: string
@@ -286,14 +285,6 @@ const CustomerManagement: React.FC = () => {
     }
   }, [loadCustomers])
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    )
-  }
-
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
@@ -305,13 +296,6 @@ const CustomerManagement: React.FC = () => {
           Total: {totalCount} customers · Showing page {page} of {Math.ceil(totalCount / rowsPerPage) || 1}
         </Typography>
       </Box>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
 
       {/* Filters and Search */}
       <Card sx={{ mb: 3 }}>
@@ -379,6 +363,13 @@ const CustomerManagement: React.FC = () => {
       {/* Customers Table/Cards */}
       <Card>
         <CardContent>
+          <AdminFetchState
+            loading={loading && customers.length === 0}
+            error={error}
+            onRetry={loadCustomers}
+            empty={!loading && !error && displayCustomers.length === 0}
+            emptyMessage="No customers found."
+          >
           {isMobile ? (
             // Mobile Card View
             <Grid container spacing={2}>
@@ -545,6 +536,7 @@ const CustomerManagement: React.FC = () => {
               />
             </Box>
           )}
+          </AdminFetchState>
         </CardContent>
       </Card>
 

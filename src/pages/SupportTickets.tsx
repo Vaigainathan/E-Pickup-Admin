@@ -54,6 +54,7 @@ import { useNavigate } from 'react-router-dom'
 import { MARKETPLACE_ORDER_CATEGORY } from '../constants/marketplace'
 import { mapError } from '../services/errorHandlerService'
 import { ApiRequestError } from '../services/apiService'
+import AdminFetchState from '../components/AdminFetchState'
 
 const SupportTickets: React.FC = () => {
   const navigate = useNavigate()
@@ -187,34 +188,19 @@ const SupportTickets: React.FC = () => {
     return new Date(timestamp).toLocaleString()
   }
 
-  const showFullPageLoader = loading && tickets.length === 0 && !listError
-
-  if (showFullPageLoader) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
-        <Typography variant="h6" sx={{ ml: 2 }}>
-          Loading Support Tickets...
-        </Typography>
-      </Box>
-    )
+  const retryTickets = () => {
+    dispatch(clearError())
+    dispatch(fetchSupportTickets({ pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit }, filters }))
   }
 
   return (
     <Box>
-      {listError && (
+      {listError && tickets.length > 0 && (
         <Alert
           severity="error"
           sx={{ mb: 2 }}
           action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => {
-                dispatch(clearError())
-                dispatch(fetchSupportTickets({ pagination: { ...pagination, offset: (pagination.page - 1) * pagination.limit }, filters }))
-              }}
-            >
+            <Button color="inherit" size="small" onClick={retryTickets}>
               Retry
             </Button>
           }
@@ -337,6 +323,13 @@ const SupportTickets: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             All Support Tickets ({tickets.length})
           </Typography>
+          <AdminFetchState
+            loading={loading && tickets.length === 0}
+            error={listError}
+            onRetry={retryTickets}
+            empty={!loading && !listError && tickets.length === 0}
+            emptyMessage="No support tickets found."
+          >
           {isMobile ? (
             // Mobile Card View
             <Grid container spacing={2}>
@@ -486,6 +479,7 @@ const SupportTickets: React.FC = () => {
               color="primary"
             />
           </Box>
+          </AdminFetchState>
         </CardContent>
       </Card>
 

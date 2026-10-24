@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Button,
-  Alert,
   CircularProgress,
   // Dialog, // Removed unused import
   // DialogTitle, // Removed unused import
@@ -31,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import LiveTrackingMap from '../components/LiveTrackingMap';
 import { liveTrackingService } from '../services/liveTrackingService';
+import AdminFetchState from '../components/AdminFetchState';
 
 interface Booking {
   id: string;
@@ -251,12 +251,13 @@ const LiveTracking: React.FC = () => {
         </Box>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
+      <AdminFetchState
+        loading={isLoading && bookings.length === 0 && drivers.length === 0}
+        error={error}
+        onRetry={loadData}
+        empty={!isLoading && !error && bookings.length === 0 && drivers.length === 0}
+        emptyMessage="No live bookings or online drivers right now."
+      >
       <Grid container spacing={3}>
         {/* Live Tracking Map */}
         <Grid item xs={12} md={8}>
@@ -460,6 +461,7 @@ const LiveTracking: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+      </AdminFetchState>
     </Box>
   );
 };

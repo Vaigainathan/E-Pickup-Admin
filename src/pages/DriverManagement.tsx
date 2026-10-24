@@ -93,6 +93,7 @@ import { comprehensiveAdminService } from '../services/comprehensiveAdminService
 import { realTimeService } from '../services/realTimeService'
 import { apiService } from '../services/apiService'
 import { AdminColors } from '../constants/Colors'
+import AdminFetchState from '../components/AdminFetchState'
 import DriverWalletView from '../components/DriverWalletView'
 
 interface Driver {
@@ -1671,31 +1672,6 @@ const ModernDriverManagement: React.FC = React.memo(() => {
     )
   }
 
-  if (!isInitialized) {
-    return (
-      <Box 
-        display="flex" 
-        flexDirection="column"
-        justifyContent="center" 
-        alignItems="center" 
-        minHeight="400px"
-        sx={{ 
-          background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-          borderRadius: 3,
-          p: 4
-        }}
-      >
-        <CircularProgress size={60} sx={{ color: AdminColors.primary }} />
-        <Typography variant="h6" sx={{ mt: 2, color: AdminColors.primary, fontWeight: 600 }}>
-          Initializing Driver Management...
-        </Typography>
-        <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-          Please wait while we load your data
-        </Typography>
-      </Box>
-    )
-  }
-
   return (
     <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
       {/* Modern Header */}
@@ -2277,7 +2253,14 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               </Box>
             </Box>
 
-            {driversLoading ? (
+            <AdminFetchState
+              loading={!isInitialized || (driversLoading && drivers.length === 0)}
+              error={!isInitialized ? null : error}
+              onRetry={handleRefresh}
+              empty={isInitialized && !driversLoading && !error && paginatedDrivers.length === 0 && !searchQuery}
+              emptyMessage="No drivers available."
+            >
+            {driversLoading && drivers.length > 0 ? (
               // Loading State
               <Grid container spacing={3}>
                 {Array.from({ length: 8 }).map((_, index) => (
@@ -2522,6 +2505,8 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                 </Table>
               </TableContainer>
             )}
+
+            </AdminFetchState>
 
             {/* Pagination */}
             <Box display="flex" justifyContent="center" mt={3}>

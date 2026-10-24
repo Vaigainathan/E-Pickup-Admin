@@ -23,7 +23,6 @@ import {
   Select,
   MenuItem,
   Alert,
-  CircularProgress,
   Grid,
   Card,
   CardContent,
@@ -41,6 +40,7 @@ import { useSelector } from 'react-redux'
 import { RootState } from '../store'
 import { errorHandlerService, mapError } from '../services/errorHandlerService'
 import { apiService } from '../services/apiService'
+import AdminFetchState from '../components/AdminFetchState'
 interface AdminUser {
   uid: string
   email: string
@@ -238,15 +238,6 @@ const AdminManagement: React.FC = () => {
     return 'Full system access and user management'
   }
 
-  // ✅ FIX: Show loading state, but don't block on error
-  if (loading && admins.length === 0) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    )
-  }
-
   return (
     <Container maxWidth="xl">
       <Box sx={{ py: 3 }}>
@@ -264,7 +255,7 @@ const AdminManagement: React.FC = () => {
           </Button>
         </Box>
 
-        {error && (
+        {error && admins.length > 0 && (
           <Alert
             severity="error"
             sx={{ mb: 3 }}
@@ -331,6 +322,13 @@ const AdminManagement: React.FC = () => {
               {/* Admin Table/Cards */}
               <Grid item xs={12}>
                 <Paper>
+                  <AdminFetchState
+                    loading={loading && admins.length === 0}
+                    error={error}
+                    onRetry={loadAdmins}
+                    empty={!loading && !error && admins.length === 0}
+                    emptyMessage="No admin users found."
+                  >
                   {isMobile ? (
                     // Mobile Card View
                     <Box sx={{ p: 2 }}>
@@ -470,6 +468,7 @@ const AdminManagement: React.FC = () => {
                       </Table>
                     </TableContainer>
                   )}
+                  </AdminFetchState>
                 </Paper>
               </Grid>
             </Grid>

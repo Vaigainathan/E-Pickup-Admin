@@ -58,6 +58,7 @@ import {
   restartSystem,
   fetchBackups
 } from '../store/slices/settingsSlice'
+import AdminFetchState from '../components/AdminFetchState'
 
 const Settings: React.FC = () => {
   // Responsive hooks
@@ -373,15 +374,13 @@ const Settings: React.FC = () => {
                   </Button>
                 </Box>
                 
-                {backupsLoading ? (
-                  <Box display="flex" justifyContent="center" p={3}>
-                    <CircularProgress />
-                  </Box>
-                ) : !Array.isArray(backups) || backups.length === 0 ? (
-                  <Alert severity="info">
-                    No backups found. Create your first backup to get started.
-                  </Alert>
-                ) : (
+                <AdminFetchState
+                  loading={backupsLoading && (!Array.isArray(backups) || backups.length === 0)}
+                  error={null}
+                  onRetry={() => dispatch(fetchBackups())}
+                  empty={!backupsLoading && Array.isArray(backups) && backups.length === 0}
+                  emptyMessage="No backups found. Create your first backup to get started."
+                >
                   <TableContainer>
                     <Table>
                       <TableHead>
@@ -456,7 +455,7 @@ const Settings: React.FC = () => {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                )}
+                </AdminFetchState>
               </CardContent>
             </Card>
           </Grid>

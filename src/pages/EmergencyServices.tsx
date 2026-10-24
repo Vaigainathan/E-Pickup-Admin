@@ -16,7 +16,6 @@ import {
   Tooltip,
   Alert,
   CircularProgress,
-  LinearProgress,
   List,
   ListItem,
   ListItemText,
@@ -56,6 +55,7 @@ import {
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { AdminColors } from '../constants/Colors'
+import AdminFetchState from '../components/AdminFetchState'
 
 interface EmergencyAlert {
   id: string
@@ -419,7 +419,7 @@ const ModernEmergencyServices: React.FC = () => {
         </Box>
 
         {/* Error Alert */}
-        {error && (
+        {error && alerts.length > 0 && (
           <Alert 
             severity="error" 
             onClose={() => setError(null)}
@@ -584,29 +584,13 @@ const ModernEmergencyServices: React.FC = () => {
           )}
         </Box>
         
-        {loading && (
-          <Box sx={{ mb: 2 }}>
-            <LinearProgress />
-          </Box>
-        )}
-
-        {activeAlerts.length === 0 ? (
-          <Card sx={{ 
-            p: 4, 
-            textAlign: 'center',
-            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-            border: '1px solid rgba(0, 0, 0, 0.08)',
-            borderRadius: 3
-          }}>
-            <CheckCircleIcon sx={{ fontSize: 64, color: '#388e3c', mb: 2 }} />
-            <Typography variant="h6" color="textSecondary" gutterBottom>
-              No Active Emergency Alerts
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              All emergency alerts have been resolved
-            </Typography>
-          </Card>
-        ) : (
+        <AdminFetchState
+          loading={loading && alerts.length === 0 && !error}
+          error={error}
+          onRetry={handleRefresh}
+          empty={!loading && !error && activeAlerts.length === 0}
+          emptyMessage="No emergency alerts match your filters."
+        >
           <Grid container spacing={3}>
             {activeAlerts.map((alert, index) => (
               <Grid item xs={12} sm={6} md={4} key={alert.id}>
@@ -709,7 +693,7 @@ const ModernEmergencyServices: React.FC = () => {
               </Grid>
             ))}
           </Grid>
-        )}
+        </AdminFetchState>
       </Box>
 
       {/* View Alert Dialog */}

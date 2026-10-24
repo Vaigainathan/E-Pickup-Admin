@@ -123,11 +123,16 @@ const analyticsSlice = createSlice({
       // Fetch Driver Analytics
       .addCase(fetchDriverAnalytics.fulfilled, (state, action) => {
         if (state.data) {
-          // ✅ FIX: Initialize users object if it doesn't exist
           if (!state.data.users) {
             state.data.users = { total: 0, drivers: 0, customers: 0, growth: 0 }
           }
-          state.data.users = { ...state.data.users, drivers: action.payload }
+          const drivers =
+            typeof action.payload === 'object' && action.payload !== null && 'totalDrivers' in action.payload
+              ? (action.payload as { totalDrivers: number }).totalDrivers
+              : typeof action.payload === 'number'
+                ? action.payload
+                : 0
+          state.data.users = { ...state.data.users, drivers }
         }
       })
       // Fetch Booking Analytics

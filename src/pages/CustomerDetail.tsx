@@ -20,7 +20,6 @@ import {
   TableHead,
   TableRow,
   Alert,
-  CircularProgress,
   Stack,
   Tabs,
   Tab,
@@ -60,6 +59,7 @@ import { mapError } from '../services/errorHandlerService'
 import { ApiRequestError } from '../services/apiService'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Booking } from '../types'
+import AdminFetchState from '../components/AdminFetchState'
 
 interface Customer {
   id: string
@@ -308,24 +308,17 @@ const CustomerDetail: React.FC = () => {
     }
   }, [editNameDialogOpen, customer])
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    )
-  }
-
-  if (!customer) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">Customer not found</Alert>
-      </Box>
-    )
-  }
-
   return (
     <Box sx={{ p: 3 }}>
+      <AdminFetchState
+        loading={loading && !customer}
+        error={error}
+        onRetry={loadCustomer}
+        empty={!loading && !error && !customer}
+        emptyMessage="Customer not found."
+      >
+      {!customer ? null : (
+      <>
       {/* Breadcrumbs */}
       <Breadcrumbs sx={{ mb: 3 }}>
         <Link color="inherit" href="/customers" onClick={(e) => { e.preventDefault(); navigate('/customers') }}>
@@ -897,6 +890,9 @@ const CustomerDetail: React.FC = () => {
       </Dialog>
 
       {/* Wallet dialog removed - no wallet system for customers */}
+      </>
+      )}
+      </AdminFetchState>
     </Box>
   )
 }

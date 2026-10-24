@@ -39,6 +39,7 @@ import { useSelector } from 'react-redux'
 import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
 import { fetchSystemHealth, fetchSystemMetrics, fetchConnectedUsers, fetchSystemLogs } from '../store/slices/systemSlice'
+import AdminFetchState from '../components/AdminFetchState'
 
 const SystemMonitoring: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -106,6 +107,16 @@ const SystemMonitoring: React.FC = () => {
   //   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   // }
 
+  const refreshAll = () => {
+    dispatch(fetchSystemHealth())
+    dispatch(fetchSystemMetrics())
+    dispatch(fetchConnectedUsers())
+    dispatch(fetchSystemLogs({ limit: 50 }))
+    setLastUpdated(new Date())
+  }
+
+  const initialLoad = loading && metrics === null && logs.length === 0
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -127,6 +138,12 @@ const SystemMonitoring: React.FC = () => {
         </Box>
       </Box>
 
+      <AdminFetchState
+        loading={initialLoad}
+        error={null}
+        onRetry={refreshAll}
+        empty={false}
+      >
       {/* System Health Overview */}
       <Grid container spacing={3} mb={3}>
         <Grid item xs={12} md={4}>
@@ -421,6 +438,7 @@ const SystemMonitoring: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+      </AdminFetchState>
     </Box>
   )
 }

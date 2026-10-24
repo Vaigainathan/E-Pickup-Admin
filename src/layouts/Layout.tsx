@@ -48,6 +48,7 @@ import { RootState } from '../store'
 import { logout } from '../store/slices/authSlice'
 import { AdminColors } from '../constants/Colors'
 import { canAccessRoute } from '../config/roleAccess'
+import { getPageTitle } from '../utils/getPageTitle'
 
 const drawerWidth = 240
 
@@ -215,7 +216,7 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {menuItems.find(item => item.path === location.pathname)?.text || 'Dashboard'}
+            {getPageTitle(location.pathname)}
           </Typography>
 
           {import.meta.env.MODE === 'staging' && (
@@ -324,9 +325,10 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
         aria-label="Main content"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 1.5, sm: 2, md: 3 },
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           mt: 8,
+          overflowX: 'hidden',
         }}
       >
         {children}

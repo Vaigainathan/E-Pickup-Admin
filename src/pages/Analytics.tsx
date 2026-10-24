@@ -9,7 +9,6 @@ import {
   Select,
   MenuItem,
   Paper,
-  Chip,
   Avatar,
   LinearProgress,
   Alert,
@@ -37,7 +36,6 @@ import {
   AreaChart,
 } from 'recharts'
 import {
-  TrendingUp as TrendingUpIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
   Assessment as AssessmentIcon,
@@ -49,7 +47,14 @@ import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
 import { fetchAnalytics, setTimeRange, clearError } from '../store/slices/analyticsSlice'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
-import { analyticsService } from '../services/analyticsService'
+import { analyticsService, type NormalizedDriverAnalytics } from '../services/analyticsService'
+import AdminFetchState from '../components/AdminFetchState'
+import { deriveTimeRangeKey } from '../utils/analyticsTimeRange'
+import {
+  formatUptimeSeconds,
+  normalizeSystemAnalytics,
+  type NormalizedSystemAnalytics,
+} from '../utils/normalizeSystemAnalytics'
 
 const Analytics: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -75,9 +80,14 @@ const Analytics: React.FC = () => {
   const [bookingAnalytics, setBookingAnalytics] = useState<any>(null)
   const [bookingAnalyticsLoading, setBookingAnalyticsLoading] = useState(false)
   // Driver analytics state
-  const [driverAnalytics, setDriverAnalytics] = useState<any>(null)
+  const [driverAnalytics, setDriverAnalytics] = useState<NormalizedDriverAnalytics | null>(null)
+  const [systemAnalytics, setSystemAnalytics] = useState<NormalizedSystemAnalytics | null>(null)
   // Support analytics state
   const [supportAnalytics, setSupportAnalytics] = useState<any>(null)
+
+  const timeRangeKey = deriveTimeRangeKey(timeRange.start, timeRange.end)
+  const driverCount = driverAnalytics?.totalDrivers ?? analyticsData?.users?.drivers ?? 0
+  const driverCountLabel = driverAnalytics?.countLabel ?? 'In selected period'
 
   // Fetch revenue trends and real-money revenue
   const fetchRevenueAnalytics = useCallback(async () => {
@@ -138,6 +148,16 @@ const Analytics: React.FC = () => {
     }
   }, [timeRange])
 
+  const fetchSystemAnalytics = useCallback(async () => {
+    try {
+      const data = await analyticsService.getSystemAnalytics(timeRange.start, timeRange.end)
+      setSystemAnalytics(normalizeSystemAnalytics(data))
+    } catch (err) {
+      console.error('Error fetching system analytics:', err)
+      setSystemAnalytics(null)
+    }
+  }, [timeRange])
+
   useEffect(() => {
     // ✅ FIX: Fetch analytics data - errors will be handled by Redux state
     dispatch(fetchAnalytics({
@@ -150,9 +170,9 @@ const Analytics: React.FC = () => {
     fetchBookingAnalytics()
     // Fetch driver analytics
     fetchDriverAnalytics()
-    // Fetch support analytics
     fetchSupportAnalytics()
-  }, [dispatch, timeRange, fetchRevenueAnalytics, fetchBookingAnalytics, fetchDriverAnalytics, fetchSupportAnalytics])
+    fetchSystemAnalytics()
+  }, [dispatch, timeRange, fetchRevenueAnalytics, fetchBookingAnalytics, fetchDriverAnalytics, fetchSupportAnalytics, fetchSystemAnalytics])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -204,13 +224,22 @@ const Analytics: React.FC = () => {
 
   // ✅ FIX: Safe data extraction with proper null checks
   const pieData = analyticsData?.users ? [
-    { name: 'Drivers', value: analyticsData.users.drivers || 0, color: '#00C49F' },
+    { name: 'Drivers', value: driverCount, color: '#00C49F' },
     { name: 'Customers', value: analyticsData.users.customers || 0, color: '#FFBB28' },
-    { name: 'Others', value: Math.max(0, (analyticsData.users.total || 0) - (analyticsData.users.drivers || 0) - (analyticsData.users.customers || 0)), color: '#FF8042' },
+    { name: 'Others', value: Math.max(0, (analyticsData.users.total || 0) - driverCount - (analyticsData.users.customers || 0)), color: '#FF8042' },
   ] : []
 
   const revenueData = analyticsData?.trends?.revenue || []
   const bookingData = analyticsData?.trends?.bookings || []
+
+  const showUptimeMetric = systemAnalytics?.uptimeSeconds !== undefined
+  const showPerformanceSection =
+    systemAnalytics?.uptimeSeconds !== undefined ||
+    systemAnalytics?.responseTimeMs !== undefined ||
+    systemAnalytics?.errorRatePercent !== undefined
+
+  const listError = error || reduxError
+  const initialLoad = loading && !analyticsData && !driverAnalytics
 
   return (
     <Box>
@@ -242,7 +271,7 @@ const Analytics: React.FC = () => {
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Time Range</InputLabel>
             <Select
-              value="30d"
+              value={timeRangeKey}
               label="Time Range"
               onChange={(e) => handleTimeRangeChange(e.target.value)}
             >
@@ -255,14 +284,21 @@ const Analytics: React.FC = () => {
       </Box>
 
       {/* ✅ FIX: Show both local and Redux errors */}
-      {(error || reduxError) && (
+      {listError && (analyticsData || driverAnalytics) && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => { setError(null); dispatch(clearError()) }}>
-          {error || reduxError}
+          {listError}
         </Alert>
       )}
 
-      {loading && <LinearProgress sx={{ mb: 3 }} />}
+      {loading && analyticsData && <LinearProgress sx={{ mb: 3 }} />}
 
+      <AdminFetchState
+        loading={initialLoad}
+        error={!analyticsData && !driverAnalytics ? listError : null}
+        onRetry={handleRefresh}
+        empty={!initialLoad && !listError && !analyticsData && !driverAnalytics}
+        emptyMessage="No analytics data for this period."
+      >
       {/* Key Metrics */}
       <Grid container spacing={3} mb={3}>
         <Grid item xs={12} sm={6} md={3}>
@@ -272,21 +308,15 @@ const Analytics: React.FC = () => {
                 <Avatar sx={{ bgcolor: 'primary.main' }}>
                   <PeopleIcon />
                 </Avatar>
-                <Chip
-                  label="+12%"
-                  color="success"
-                  size="small"
-                  icon={<TrendingUpIcon />}
-                />
               </Box>
               <Typography color="textSecondary" gutterBottom variant="h6">
                 Total Drivers
               </Typography>
               <Typography variant="h4" component="h2" fontWeight="bold">
-                {analyticsData?.users?.drivers || 0}
+                {driverCount}
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                {analyticsData?.users?.total || 0} total users
+                {driverCountLabel}
               </Typography>
             </CardContent>
           </Card>
@@ -321,21 +351,23 @@ const Analytics: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom variant="h6">
-                System Uptime
-              </Typography>
-              <Typography variant="h4" component="h2" fontWeight="bold">
-                99.9%
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                System uptime
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+        {showUptimeMetric && (
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom variant="h6">
+                  System Uptime
+                </Typography>
+                <Typography variant="h4" component="h2" fontWeight="bold">
+                  {formatUptimeSeconds(systemAnalytics?.uptimeSeconds)}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Server uptime
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
       </Grid>
 
       <Grid container spacing={3}>
@@ -527,48 +559,55 @@ const Analytics: React.FC = () => {
           </Card>
         </Grid>
 
-        {/* Performance Metrics */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Performance Metrics
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, textAlign: 'center' }}>
-                    <Typography variant="h4" color="success.main" fontWeight="bold">
-                      99.9%
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      System Uptime
-                    </Typography>
-                  </Paper>
+        {showPerformanceSection && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Performance Metrics
+                </Typography>
+                <Grid container spacing={3}>
+                  {systemAnalytics?.uptimeSeconds !== undefined && (
+                    <Grid item xs={12} md={4}>
+                      <Paper sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="h4" color="success.main" fontWeight="bold">
+                          {formatUptimeSeconds(systemAnalytics.uptimeSeconds)}
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          System Uptime
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+                  {systemAnalytics?.responseTimeMs !== undefined && (
+                    <Grid item xs={12} md={4}>
+                      <Paper sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="h4" color="info.main" fontWeight="bold">
+                          {systemAnalytics.responseTimeMs}ms
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          Average Response Time
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  )}
+                  {systemAnalytics?.errorRatePercent !== undefined && (
+                    <Grid item xs={12} md={4}>
+                      <Paper sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="h4" color="warning.main" fontWeight="bold">
+                          {systemAnalytics.errorRatePercent}%
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          Error Rate
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  )}
                 </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, textAlign: 'center' }}>
-                    <Typography variant="h4" color="info.main" fontWeight="bold">
-                      150ms
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Average Response Time
-                    </Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, textAlign: 'center' }}>
-                    <Typography variant="h4" color="warning.main" fontWeight="bold">
-                      0.1%
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Error Rate
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* Booking Analytics Section */}
         <Grid item xs={12}>
@@ -685,7 +724,10 @@ const Analytics: React.FC = () => {
                     Total Drivers
                   </Typography>
                   <Typography variant="h4" fontWeight="bold">
-                    {driverAnalytics.totalDrivers || 0}
+                    {driverAnalytics.totalDrivers}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {driverAnalytics.countLabel}
                   </Typography>
                 </CardContent>
               </Card>
@@ -721,7 +763,7 @@ const Analytics: React.FC = () => {
                     Average Rating
                   </Typography>
                   <Typography variant="h4" fontWeight="bold">
-                    {driverAnalytics.averageRating ? driverAnalytics.averageRating.toFixed(2) : '0.00'}
+                    {driverAnalytics.averageRating != null ? driverAnalytics.averageRating.toFixed(2) : '—'}
                   </Typography>
                 </CardContent>
               </Card>
@@ -789,6 +831,7 @@ const Analytics: React.FC = () => {
           </>
         )}
       </Grid>
+      </AdminFetchState>
     </Box>
   )
 }

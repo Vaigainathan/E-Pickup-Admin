@@ -2,6 +2,10 @@ import { apiService } from './apiService'
 import { AnalyticsData } from '../types'
 import { mapError } from './errorHandlerService'
 import { ApiRequestError } from './apiService'
+import { normalizeDriverAnalytics, NormalizedDriverAnalytics } from '../utils/normalizeDriverAnalytics'
+
+export type { NormalizedDriverAnalytics }
+export { normalizeDriverAnalytics }
 
 class AnalyticsService {
   async getAnalytics(startDate: string, endDate: string): Promise<AnalyticsData> {
@@ -11,12 +15,14 @@ class AnalyticsService {
       this.getBookingAnalytics(startDate, endDate),
     ])
 
+    const normalizedDrivers = normalizeDriverAnalytics(driverData)
+
     return {
       period: `${startDate} to ${endDate}`,
       dateRange: { start: startDate, end: endDate },
       users: {
-        total: (driverData.totalDrivers || 0) + (bookingData.totalCustomers || 0),
-        drivers: driverData.totalDrivers || 0,
+        total: normalizedDrivers.totalDrivers + (bookingData.totalCustomers || 0),
+        drivers: normalizedDrivers.totalDrivers,
         customers: bookingData.totalCustomers || 0,
         growth: 0,
       },
@@ -36,9 +42,11 @@ class AnalyticsService {
     } as AnalyticsData
   }
 
-  async getDriverAnalytics(startDate: string, endDate: string): Promise<any> {
+  async getDriverAnalytics(startDate: string, endDate: string): Promise<NormalizedDriverAnalytics> {
     const response = await apiService.get('/api/admin/analytics/drivers', { startDate, endDate })
-    if (response.success && response.data) return response.data
+    if (response.success && response.data) {
+      return normalizeDriverAnalytics(response.data)
+    }
     throw new ApiRequestError(response.error?.code || 'UNKNOWN_ERROR', mapError({ code: response.error?.code }))
   }
 

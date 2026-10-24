@@ -23,7 +23,6 @@ import {
   Pagination,
   Tooltip,
   Alert,
-  CircularProgress,
   LinearProgress,
   FormControl,
   InputLabel,
@@ -62,6 +61,7 @@ import {
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { bookingService } from '../services/bookingService'
 import BookingInterventionDialog from '../components/BookingInterventionDialog'
+import AdminFetchState from '../components/AdminFetchState'
 import { Booking as BookingType } from '../types'
 
 // Modern Color Theme
@@ -1099,31 +1099,6 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   }, [sortBy])
 
 
-  if (!isInitialized) {
-    return (
-      <Box 
-        display="flex" 
-        flexDirection="column"
-        justifyContent="center" 
-        alignItems="center" 
-        minHeight="60vh"
-        sx={{ 
-          background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryLight} 100%)`,
-          borderRadius: 3,
-          color: 'white'
-        }}
-      >
-        <CircularProgress size={60} sx={{ color: 'white', mb: 2 }} />
-        <Typography variant="h5" fontWeight="600" mb={1}>
-          Initializing Booking Management
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.8 }}>
-          Setting up real-time monitoring and data synchronization...
-        </Typography>
-      </Box>
-    )
-  }
-
   return (
     <Box sx={{ background: theme.background, minHeight: '100vh', p: 3 }}>
       {/* Modern Header */}
@@ -1648,6 +1623,13 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       )}
 
       {/* Bookings Table/Grid */}
+      <AdminFetchState
+        loading={!isInitialized || (bookingsLoading && bookings.length === 0)}
+        error={!isInitialized ? null : error}
+        onRetry={() => fetchBookings({ offset: 0, append: false })}
+        empty={isInitialized && !bookingsLoading && !error && filteredBookings.length === 0}
+        emptyMessage="No bookings found."
+      >
       {viewMode === 'table' ? (
         <Card sx={{ boxShadow: theme.shadow }}>
           <TableContainer sx={{ 
@@ -2203,6 +2185,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           ))}
         </Grid>
       )}
+      </AdminFetchState>
 
       {/* Pagination */}
       {totalPages > 1 && (

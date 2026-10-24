@@ -1016,16 +1016,10 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
 
   const getSystemStats = useCallback(() => {
     return {
-      totalUsers: (drivers?.length || 0) + (bookings?.length || 0),
-      activeSessions: Math.floor(Math.random() * 50) + 20,
-      serverLoad: Math.floor(Math.random() * 30) + 40,
-      responseTime: Math.floor(Math.random() * 50) + 100,
-      uptime: Math.floor((systemHealth?.uptime || 0) / 3600),
-      memoryUsage: Math.floor(Math.random() * 20) + 60,
-      cpuUsage: Math.floor(Math.random() * 15) + 25,
-      diskUsage: Math.floor(Math.random() * 10) + 45
+      uptimeHours: Math.floor((systemHealth?.uptime || 0) / 3600),
+      uptimeMinutes: Math.floor(((systemHealth?.uptime || 0) % 3600) / 60),
     }
-  }, [drivers, bookings, systemHealth])
+  }, [systemHealth])
 
   const getSystemStatusColor = useCallback((status: string) => {
     switch (status) {
@@ -1125,13 +1119,6 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                     label="Real-time"
                     size="small"
                     color="primary"
-                    variant="outlined"
-                  />
-                  <Chip
-                    icon={<SpeedIcon />}
-                    label={`${systemStats.responseTime}ms`}
-                    size="small"
-                    color="success"
                     variant="outlined"
                   />
                 </Stack>
@@ -1404,10 +1391,18 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="System Health"
-            value="99.9%"
+            value={
+              systemHealth?.status
+                ? String(systemHealth.status).charAt(0).toUpperCase() + String(systemHealth.status).slice(1)
+                : '—'
+            }
             icon={<SecurityIcon />}
             color={AdminColors.health}
-            subtitle="Uptime"
+            subtitle={
+              systemHealth?.uptime
+                ? `Uptime ${Math.floor((systemHealth.uptime || 0) / 3600)}h ${Math.floor(((systemHealth.uptime || 0) % 3600) / 60)}m`
+                : 'Status from monitoring'
+            }
             loading={healthLoading}
             onClick={() => navigate('/monitoring')}
           />
@@ -1584,65 +1579,20 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                 <Typography variant="h6" fontWeight="600" color={AdminColors.primary} mb={2}>
                   System Performance
                 </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" fontWeight="700" color={AdminColors.success}>
-                        {systemStats.uptime}h
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        Uptime
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" fontWeight="700" color={AdminColors.info}>
-                        {systemStats.activeSessions}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        Active Sessions
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" fontWeight="700" color={AdminColors.warning}>
-                        {systemStats.serverLoad}%
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        Server Load
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Box textAlign="center">
-                      <Typography variant="h4" fontWeight="700" color={AdminColors.error}>
-                        {systemStats.memoryUsage}%
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        Memory Usage
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-                <Box mt={2}>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={systemStats.cpuUsage} 
-                    sx={{ 
-                      height: 8, 
-                      borderRadius: 4,
-                      bgcolor: 'rgba(0, 0, 0, 0.1)',
-                      '& .MuiLinearProgress-bar': {
-                        bgcolor: systemStats.cpuUsage > 80 ? AdminColors.error : AdminColors.success
-                      }
-                    }} 
-                  />
-                  <Typography variant="caption" color="textSecondary" mt={1} display="block">
-                    CPU Usage: {systemStats.cpuUsage}%
+                {systemHealth?.uptime ? (
+                  <Box textAlign="center" py={2}>
+                    <Typography variant="h4" fontWeight="700" color={AdminColors.success}>
+                      {systemStats.uptimeHours}h {systemStats.uptimeMinutes}m
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      Server uptime
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="textSecondary">
+                    Uptime data is not available. Open System Monitoring for live metrics.
                   </Typography>
-                </Box>
+                )}
               </CardContent>
             </Card>
           </Fade>

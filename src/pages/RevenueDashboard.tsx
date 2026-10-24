@@ -5,8 +5,6 @@ import {
   Card,
   CardContent,
   Typography,
-  CircularProgress,
-  Alert,
   Button,
   TextField,
 } from '@mui/material'
@@ -16,6 +14,7 @@ import {
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { AdminColors } from '../constants/Colors'
+import AdminFetchState from '../components/AdminFetchState'
 
 interface RevenueStats {
   totalRevenue: number
@@ -64,14 +63,6 @@ const RevenueDashboard: React.FC = () => {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0)
 
-  if (loading && !revenueStats) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    )
-  }
-
   return (
     <Box sx={{ p: 3 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
@@ -110,12 +101,13 @@ const RevenueDashboard: React.FC = () => {
         </CardContent>
       </Card>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} action={<Button color="inherit" size="small" onClick={loadRevenueData}>Retry</Button>}>
-          {error}
-        </Alert>
-      )}
-
+      <AdminFetchState
+        loading={loading && !revenueStats}
+        error={error}
+        onRetry={loadRevenueData}
+        empty={!loading && !error && !revenueStats}
+        emptyMessage="No revenue data for this period."
+      >
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
           <Card>
@@ -154,6 +146,7 @@ const RevenueDashboard: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+      </AdminFetchState>
     </Box>
   )
 }

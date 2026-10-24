@@ -39,7 +39,7 @@ import {
 } from '@mui/icons-material'
 import { useSelector } from 'react-redux'
 import { RootState } from '../store'
-import { errorHandlerService } from '../services/errorHandlerService'
+import { errorHandlerService, mapError } from '../services/errorHandlerService'
 import { apiService } from '../services/apiService'
 interface AdminUser {
   uid: string
@@ -196,10 +196,10 @@ const AdminManagement: React.FC = () => {
         setOpenDialog(false)
         loadAdmins()
       } else {
-        throw new Error(response.error?.message || 'Failed to create admin')
+        setError(mapError({ code: response.error?.code, message: response.error?.message }))
       }
-    } catch (err: any) {
-      setError(errorHandlerService.handleError(err).message)
+    } catch (err: unknown) {
+      setError(mapError(err))
     }
   }
 
@@ -499,6 +499,10 @@ const AdminManagement: React.FC = () => {
                 value={formData.temporaryPassword}
                 onChange={(e) => setFormData({ ...formData, temporaryPassword: e.target.value })}
                 margin="normal"
+                required
+                inputProps={{ minLength: 8 }}
+                helperText="At least 8 characters (sent as temporaryPassword to the server)"
+                error={formData.temporaryPassword.length > 0 && formData.temporaryPassword.length < 8}
               />
               <FormControl fullWidth margin="normal">
                 <InputLabel>Role</InputLabel>
@@ -521,7 +525,11 @@ const AdminManagement: React.FC = () => {
             <Button
               onClick={handleSaveAdmin}
               variant="contained"
-              disabled={!formData.email || !formData.displayName || !formData.temporaryPassword}
+              disabled={
+                !formData.email ||
+                !formData.displayName ||
+                formData.temporaryPassword.length < 8
+              }
             >
               Create
             </Button>

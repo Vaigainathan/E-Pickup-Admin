@@ -15,15 +15,31 @@ export interface ShopListResponse {
   pagination: { limit: number; offset: number; total: number }
 }
 
+export interface ShopOnboardingStatus {
+  approvalStatus?: string
+  rejectionReason?: string | null
+  rejectedSection?: string | null
+  rejectedSections?: string[]
+  submitted?: boolean
+  steps?: {
+    businessDetails?: boolean
+    documents?: boolean
+    bankDetails?: boolean
+  }
+  documents?: {
+    gstUrl?: string | null
+    fssaiUrl?: string | null
+    gstStatus?: string | null
+    fssaiStatus?: string | null
+  }
+}
+
 export interface ShopDetail {
   shopId: string
   user?: Record<string, unknown>
   profile?: Record<string, unknown>
   upiVerified?: boolean
-  onboardingStatus?: {
-    rejectedSections?: string[]
-    [key: string]: unknown
-  }
+  onboardingStatus?: ShopOnboardingStatus
 }
 
 export interface MarketplaceOrderSummary {

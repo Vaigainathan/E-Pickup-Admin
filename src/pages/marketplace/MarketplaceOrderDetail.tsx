@@ -29,6 +29,13 @@ import { marketplaceAdminService } from '../../services/marketplaceAdminService'
 import { mapError } from '../../services/errorHandlerService'
 import { RootState } from '../../store'
 import type { MarketplaceOrderDetail } from '../../types/marketplace'
+import {
+  eventReason,
+  formatActor,
+  formatIst,
+  humanizeEventType,
+  utrDisplay,
+} from '../../utils/marketplaceDisplay'
 
 type PaymentReviewOutcome = 'found' | 'not_found' | 'refund'
 type DisputeOutcome = 'received' | 'resend'
@@ -120,6 +127,21 @@ const MarketplaceOrderDetailPage: React.FC = () => {
   }
 
   const payment = (detail?.order?.payment || {}) as Record<string, unknown>
+  const orderItems = useMemo(() => {
+    const items = orderRecord?.items
+    return Array.isArray(items) ? items : []
+  }, [orderRecord?.items])
+
+  const paymentTimestamps = useMemo(() => {
+    const fields = [
+      { key: 'initiatedAt', label: 'Initiated' },
+      { key: 'utrSubmittedAt', label: 'UTR submitted' },
+      { key: 'confirmedAt', label: 'Confirmed' },
+      { key: 'expiredAt', label: 'Expired' },
+      { key: 'refundedAt', label: 'Refunded' },
+    ]
+    return fields.filter((f) => payment[f.key] != null)
+  }, [payment])
 
   const openRefundSent = (refundId: string, amount: unknown) => {
     setSelectedRefundId(refundId)
@@ -146,10 +168,11 @@ const MarketplaceOrderDetailPage: React.FC = () => {
             {actionError && <Alert severity="error" sx={{ mb: 2 }}>{actionError}</Alert>}
             <Card sx={{ mb: 2 }}>
               <CardContent>
-                <Typography variant="subtitle1">Status: {detail.summary.orderStatus}</Typography>
-                <Typography variant="body2">Customer: {detail.customer?.name || detail.summary.customerId}</Typography>
-                <Typography variant="body2">Shop: {detail.shop?.name || detail.summary.shopId}</Typography>
-                <Typography variant="body2">Amount due: {detail.summary.amount ?? '—'}</Typography>
+                <Typography variant="h6" gutterBottom>Summary</Typography>
+                <Typography variant="body2">Status: {detail.summary.orderStatus || '—'}</Typography>
+                <Typography variant="body2">Order ID: {detail.summary.displayId || detail.summary.orderId}</Typography>
+                <Typography variant="body2">Created: {formatIst(orderRecord?.createdAt)}</Typography>
+                <Typography variant="body2">Updated: {formatIst(orderRecord?.updatedAt)}</Typography>
                 {detail.summary.linkedBookingId && (
                   <Typography variant="body2">
                     Linked booking:{' '}
@@ -162,8 +185,74 @@ const MarketplaceOrderDetailPage: React.FC = () => {
             </Card>
             <Card sx={{ mb: 2 }}>
               <CardContent>
-                <Typography variant="h6">Payment</Typography>
-                <pre style={{ fontSize: 12, overflow: 'auto' }}>{JSON.stringify(payment, null, 2)}</pre>
+                <Typography variant="h6" gutterBottom>Customer</Typography>
+                <Typography variant="body2">Name: {detail.customer?.name || '—'}</Typography>
+                <Typography variant="body2">Phone: {detail.customer?.phone || '—'}</Typography>
+                <Typography variant="body2">Email: {detail.customer?.email || '—'}</Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Shop</Typography>
+                <Typography variant="body2">Name: {detail.shop?.name || '—'}</Typography>
+                <Typography variant="body2">Phone: {detail.shop?.phone || '—'}</Typography>
+                <Typography variant="body2">Shop ID: {detail.summary.shopId || '—'}</Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Items</Typography>
+                {orderItems.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">No line items</Typography>
+                ) : (
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Product</TableCell>
+                        <TableCell>Variant</TableCell>
+                        <TableCell align="right">Qty</TableCell>
+                        <TableCell align="right">Price</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {orderItems.map((line, index) => {
+                        const row = line as Record<string, unknown>
+                        const variant =
+                          row.variantValue != null
+                            ? `${row.variantLabel ?? ''}: ${row.variantValue}`.trim()
+                            : '—'
+                        return (
+                          <TableRow key={String(row.id ?? index)}>
+                            <TableCell>{String(row.name ?? '—')}</TableCell>
+                            <TableCell>{variant || '—'}</TableCell>
+                            <TableCell align="right">{String(row.qty ?? '—')}</TableCell>
+                            <TableCell align="right">{String(row.price ?? '—')}</TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Items total: {String(orderRecord?.itemsTotal ?? payment.amount ?? detail.summary.amount ?? '—')}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Payment</Typography>
+                <Typography variant="body2">Status: {String(payment.status ?? '—')}</Typography>
+                <Typography variant="body2">
+                  Amount: {String(payment.amount ?? detail.summary.amount ?? '—')}
+                </Typography>
+                <Typography variant="body2">
+                  UTR: {utrDisplay(payment, orderStatus)}
+                </Typography>
+                {paymentTimestamps.map((row) => (
+                  <Typography key={row.key} variant="body2">
+                    {row.label}: {formatIst(payment[row.key])}
+                  </Typography>
+                ))}
               </CardContent>
             </Card>
             <Card sx={{ mb: 2 }}>
@@ -175,6 +264,7 @@ const MarketplaceOrderDetailPage: React.FC = () => {
                       <TableCell>ID</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Amount</TableCell>
+                      <TableCell>Due by</TableCell>
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -184,6 +274,7 @@ const MarketplaceOrderDetailPage: React.FC = () => {
                         <TableCell>{r.id}</TableCell>
                         <TableCell>{String(r.status)}</TableCell>
                         <TableCell>{String(r.amount ?? '')}</TableCell>
+                        <TableCell>{formatIst(r.dueBy)}</TableCell>
                         <TableCell align="right">
                           {String(r.status) === 'due' && (
                             <Button size="small" onClick={() => openRefundSent(r.id, r.amount)}>Mark sent</Button>
@@ -201,9 +292,33 @@ const MarketplaceOrderDetailPage: React.FC = () => {
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Events</Typography>
-                <pre style={{ fontSize: 11, maxHeight: 240, overflow: 'auto' }}>
-                  {JSON.stringify(detail.events, null, 2)}
-                </pre>
+                {detail.events.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">No events</Typography>
+                ) : (
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Time (IST)</TableCell>
+                        <TableCell>Type</TableCell>
+                        <TableCell>Actor</TableCell>
+                        <TableCell>Reason</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {detail.events.map((ev, index) => {
+                        const event = ev as Record<string, unknown>
+                        return (
+                          <TableRow key={String(event.id ?? index)}>
+                            <TableCell>{formatIst(event.at)}</TableCell>
+                            <TableCell>{humanizeEventType(event.type)}</TableCell>
+                            <TableCell>{formatActor(event.actor)}</TableCell>
+                            <TableCell>{eventReason(event)}</TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
             <Box display="flex" flexWrap="wrap" gap={1}>

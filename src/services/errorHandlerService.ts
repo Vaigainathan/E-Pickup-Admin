@@ -159,6 +159,12 @@ class ErrorHandlerService {
       retryable: true,
       action: 'Please use a different value'
     },
+    'EMAIL_BELONGS_TO_OTHER_ROLE': {
+      code: 'EMAIL_BELONGS_TO_OTHER_ROLE',
+      message: 'This email is already used by another ePickup account.',
+      severity: 'error',
+      retryable: false,
+    },
 
     // Rate limiting
     'RATE_LIMIT_EXCEEDED': {
@@ -244,21 +250,17 @@ class ErrorHandlerService {
    * Handle Firebase Auth specific errors
    */
   private handleFirebaseError(error: any): ErrorInfo {
+    const wrongCredentials: ErrorInfo = {
+      code: 'INVALID_CREDENTIALS',
+      message: 'Wrong email or password.',
+      severity: 'error',
+      retryable: true,
+    }
+
     const firebaseErrorMap: Record<string, ErrorInfo> = {
-      'auth/user-not-found': {
-        code: 'USER_NOT_FOUND',
-        message: 'No admin account found with this email address.',
-        severity: 'error',
-        retryable: true,
-        action: 'Please check your email address'
-      },
-      'auth/wrong-password': {
-        code: 'INVALID_CREDENTIALS',
-        message: 'Incorrect password. Please try again.',
-        severity: 'error',
-        retryable: true,
-        action: 'Please check your password'
-      },
+      'auth/user-not-found': wrongCredentials,
+      'auth/wrong-password': wrongCredentials,
+      'auth/invalid-credential': wrongCredentials,
       'auth/invalid-email': {
         code: 'VALIDATION_ERROR',
         message: 'Invalid email address format.',
@@ -275,10 +277,9 @@ class ErrorHandlerService {
       },
       'auth/too-many-requests': {
         code: 'RATE_LIMIT_EXCEEDED',
-        message: 'Too many failed attempts. Please try again later.',
+        message: 'Too many attempts. Try again later.',
         severity: 'warning',
         retryable: true,
-        action: 'Wait a few minutes before trying again'
       },
       'auth/network-request-failed': {
         code: 'NETWORK_ERROR',

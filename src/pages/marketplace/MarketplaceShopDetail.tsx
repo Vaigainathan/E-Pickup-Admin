@@ -70,7 +70,8 @@ const MarketplaceShopDetail: React.FC = () => {
   const [actionError, setActionError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<'reject' | 'suspend' | 'upi' | null>(null)
   const [reason, setReason] = useState('')
-  const [verifiedName, setVerifiedName] = useState('')
+  const [upiDiffersMode, setUpiDiffersMode] = useState(false)
+  const [differingUpiName, setDifferingUpiName] = useState('')
   const [sections, setSections] = useState<string[]>([])
 
   const load = useCallback(async () => {
@@ -126,6 +127,21 @@ const MarketplaceShopDetail: React.FC = () => {
     { key: 'bankDetails', label: 'Bank & UPI' },
   ] as const
 
+  const resetUpiDialogState = () => {
+    setUpiDiffersMode(false)
+    setDifferingUpiName('')
+  }
+
+  const closeDialog = () => {
+    setDialog(null)
+    resetUpiDialogState()
+  }
+
+  const openUpiVerifyDialog = () => {
+    resetUpiDialogState()
+    setDialog('upi')
+  }
+
   const runAction = async (fn: () => Promise<unknown>) => {
     try {
       setActionError(null)
@@ -133,16 +149,27 @@ const MarketplaceShopDetail: React.FC = () => {
       setDialog(null)
       setReason('')
       setSections([])
+      resetUpiDialogState()
       await load()
     } catch (err: unknown) {
       setActionError(mapError({ code: (err as { code?: string })?.code }))
     }
   }
 
-  const registeredName =
-    (typeof upiVerification.verifiedName === 'string' && upiVerification.verifiedName) ||
-    (typeof bank.accountHolderName === 'string' && bank.accountHolderName) ||
-    '—'
+  const shopEnteredUpiName =
+    (typeof bank.upiRegisteredName === 'string' && bank.upiRegisteredName.trim()) ||
+    (typeof bank.accountHolderName === 'string' && bank.accountHolderName.trim()) ||
+    ''
+
+  const fullUpiId =
+    typeof bank.upiId === 'string' && bank.upiId.trim() ? bank.upiId.trim() : '—'
+
+  const currentlyVerifiedAs =
+    typeof upiVerification.verifiedName === 'string' && upiVerification.verifiedName.trim()
+      ? upiVerification.verifiedName.trim()
+      : null
+
+  const registeredNameDisplay = shopEnteredUpiName || '—'
 
   return (
     <Box sx={{ p: 3 }}>
@@ -186,7 +213,10 @@ const MarketplaceShopDetail: React.FC = () => {
                   <CardContent>
                     <Typography variant="h6" gutterBottom>Bank & UPI</Typography>
                     <DetailRow label="UPI ID" value={maskUpiId(bank.upiId)} />
-                    <DetailRow label="Registered name" value={registeredName} />
+                    <DetailRow label="Registered name" value={registeredNameDisplay} />
+                    {upiVerified && currentlyVerifiedAs ? (
+                      <DetailRow label="Verified as" value={currentlyVerifiedAs} />
+                    ) : null}
                     <DetailRow
                       label="Verification"
                       value={upiVerified ? 'Verified by admin' : 'Not verified'}
@@ -258,7 +288,7 @@ const MarketplaceShopDetail: React.FC = () => {
                   <Button variant="outlined" onClick={() => setDialog('reject')}>Reject</Button>
                 )}
                 {showVerifyUpi && (
-                  <Button variant="outlined" onClick={() => setDialog('upi')}>Verify UPI</Button>
+                  <Button variant="outlined" onClick={openUpiVerifyDialog}>Verify UPI</Button>
                 )}
                 {showUnsuspend && (
                   <Button variant="outlined" onClick={() => runAction(() => shopAdminService.unsuspend(shopId!))}>
@@ -276,7 +306,7 @@ const MarketplaceShopDetail: React.FC = () => {
         )}
       </AdminFetchState>
 
-      <Dialog open={dialog === 'reject'} onClose={() => setDialog(null)} maxWidth="sm" fullWidth>
+      <Dialog open={dialog === 'reject'} onClose={closeDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Reject shop</DialogTitle>
         <DialogContent>
           <TextField fullWidth margin="normal" label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -300,7 +330,7 @@ const MarketplaceShopDetail: React.FC = () => {
           </FormGroup>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialog(null)}>Cancel</Button>
+          <Button onClick={closeDialog}>Cancel</Button>
           <Button
             variant="contained"
             disabled={!reason.trim()}
@@ -311,13 +341,13 @@ const MarketplaceShopDetail: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={dialog === 'suspend'} onClose={() => setDialog(null)} maxWidth="sm" fullWidth>
+      <Dialog open={dialog === 'suspend'} onClose={closeDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Suspend shop</DialogTitle>
         <DialogContent>
           <TextField fullWidth margin="normal" label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialog(null)}>Cancel</Button>
+          <Button onClick={closeDialog}>Cancel</Button>
           <Button
             variant="contained"
             color="warning"
@@ -329,27 +359,60 @@ const MarketplaceShopDetail: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={dialog === 'upi'} onClose={() => setDialog(null)} maxWidth="sm" fullWidth>
+      <Dialog open={dialog === 'upi'} onClose={closeDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Verify UPI name</DialogTitle>
         <DialogContent>
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Verified name"
-            required
-            value={verifiedName}
-            onChange={(e) => setVerifiedName(e.target.value)}
-          />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Open any UPI app, start a payment to this UPI ID (don&apos;t pay), and check the name it shows.
+          </Typography>
+          <DetailRow label="UPI ID" value={<Typography component="span" variant="body2" sx={{ fontFamily: 'monospace' }}>{fullUpiId}</Typography>} />
+          <DetailRow label="Registered name" value={registeredNameDisplay} />
+          {currentlyVerifiedAs ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Currently verified as: {currentlyVerifiedAs}
+            </Typography>
+          ) : null}
+          {upiDiffersMode ? (
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Name shown in UPI app"
+              required
+              value={differingUpiName}
+              onChange={(e) => setDifferingUpiName(e.target.value)}
+              autoFocus
+            />
+          ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialog(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            disabled={!verifiedName.trim()}
-            onClick={() => runAction(() => shopAdminService.verifyUpi(shopId!, verifiedName.trim()))}
-          >
-            Save
-          </Button>
+          <Button onClick={closeDialog}>Cancel</Button>
+          {upiDiffersMode ? (
+            <>
+              <Button onClick={() => setUpiDiffersMode(false)}>Back</Button>
+              <Button
+                variant="contained"
+                disabled={!differingUpiName.trim()}
+                onClick={() =>
+                  runAction(() => shopAdminService.verifyUpi(shopId!, differingUpiName.trim()))
+                }
+              >
+                Confirm
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => setUpiDiffersMode(true)}>Name differs</Button>
+              <Button
+                variant="contained"
+                disabled={!shopEnteredUpiName}
+                onClick={() =>
+                  runAction(() => shopAdminService.verifyUpi(shopId!, shopEnteredUpiName))
+                }
+              >
+                Name matches — verify
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

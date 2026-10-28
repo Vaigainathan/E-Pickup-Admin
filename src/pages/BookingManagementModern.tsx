@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import { useSelector } from 'react-redux'
 import {
   Box,
   Typography,
@@ -64,6 +65,8 @@ import { resolveErrorMessage } from '../services/errorHandlerService'
 import BookingInterventionDialog from '../components/BookingInterventionDialog'
 import AdminFetchState from '../components/AdminFetchState'
 import { Booking as ApiBooking } from '../types'
+import { RootState } from '../store'
+import { isSuperAdmin } from '../config/roleAccess'
 
 // Modern Color Theme
 const theme = {
@@ -578,10 +581,33 @@ const VerificationPhotoCard: React.FC<VerificationPhotoCardProps> = ({ title, ve
 }
 
 const ModernBookingManagement: React.FC = React.memo(() => {
-  // ✅ UNIFIED STATUS DEFINITION: Match backend exactly (parcel fallback when no allowedAdminTransitions)
-  const statusOptions = ['pending', 'driver_assigned', 'accepted', 'driver_enroute', 'driver_arrived', 'picked_up', 'in_transit', 'delivered', 'completed', 'cancelled', 'rejected']
+  const authUser = useSelector((state: RootState) => state.auth.user)
+  const privilegedAdmin = isSuperAdmin(authUser?.role)
+
+  const ADMIN_STATUS_EDIT_BLOCKLIST = new Set(['delivered', 'money_collection', 'completed'])
+
+  const filterAdminEditableStatuses = useCallback(
+    (statuses: string[]) => statuses.filter((s) => !ADMIN_STATUS_EDIT_BLOCKLIST.has(s)),
+    [],
+  )
+
+  // Parcel fallback when GET booking does not return allowedAdminTransitions
+  const statusOptions = filterAdminEditableStatuses([
+    'pending',
+    'driver_assigned',
+    'accepted',
+    'driver_enroute',
+    'driver_arrived',
+    'picked_up',
+    'in_transit',
+    'cancelled',
+    'rejected',
+  ])
 
   const showEditStatusInList = (booking: BookingViewModel): boolean => {
+    if (!privilegedAdmin) {
+      return false
+    }
     if (booking.sourceType === 'marketplace') {
       return Array.isArray(booking.allowedAdminTransitions) && booking.allowedAdminTransitions.length > 0
     }
@@ -1213,7 +1239,11 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         addNotification(resolveErrorMessage({ code: 'USE_ORDER_ACTIONS' }), 'info')
         return
       }
-      setStatusTransitionOptions(transitions && transitions.length > 0 ? [...transitions] : null)
+      setStatusTransitionOptions(
+        transitions && transitions.length > 0
+          ? filterAdminEditableStatuses([...transitions])
+          : null,
+      )
       setNewStatus(full.status)
       setStatusDialogOpen(true)
     } catch (error) {
@@ -1221,11 +1251,11 @@ const ModernBookingManagement: React.FC = React.memo(() => {
     } finally {
       setIsUpdating(false)
     }
-  }, [addNotification])
+  }, [addNotification, filterAdminEditableStatuses])
 
   const statusOptionsForDialog = useMemo(
-    () => statusTransitionOptions ?? statusOptions,
-    [statusTransitionOptions, statusOptions],
+    () => filterAdminEditableStatuses(statusTransitionOptions ?? statusOptions),
+    [statusTransitionOptions, statusOptions, filterAdminEditableStatuses],
   )
 
   // Enhanced sorting
@@ -2654,17 +2684,19 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           <Button onClick={() => setViewDialogOpen(false)}>
             Close
           </Button>
-          <Button
-            variant="contained"
-            color="warning"
-            startIcon={<WarningIcon />}
-            onClick={() => {
-              setInterventionDialogOpen(true)
-            }}
-            sx={{ ml: 1 }}
-          >
-            Intervene
-          </Button>
+          {privilegedAdmin && (
+            <Button
+              variant="contained"
+              color="warning"
+              startIcon={<WarningIcon />}
+              onClick={() => {
+                setInterventionDialogOpen(true)
+              }}
+              sx={{ ml: 1 }}
+            >
+              Intervene
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

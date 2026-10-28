@@ -27,6 +27,7 @@ import { useSelector } from 'react-redux'
 import AdminFetchState from '../../components/AdminFetchState'
 import { marketplaceAdminService } from '../../services/marketplaceAdminService'
 import { resolveErrorMessage } from '../../services/errorHandlerService'
+import { isSuperAdmin } from '../../config/roleAccess'
 import { RootState } from '../../store'
 import type { MarketplaceOrderDetail } from '../../types/marketplace'
 import {
@@ -47,6 +48,7 @@ const MarketplaceOrderDetailPage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useSelector((state: RootState) => state.auth)
   const operator = user?.uid || user?.id || ''
+  const privilegedAdmin = isSuperAdmin(user?.role)
 
   const [detail, setDetail] = useState<MarketplaceOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -98,6 +100,16 @@ const MarketplaceOrderDetailPage: React.FC = () => {
     }
     return !TERMINAL_ORDER_STATUSES.has(orderStatus)
   }, [detail, orderStatus])
+
+  const showCancelButton = privilegedAdmin && showCancel
+
+  const showCancelBlockedNotice = useMemo(() => {
+    const reason = detail?.summary?.cancelBlockedReason
+    if (detail?.summary?.canAdminCancel !== false) {
+      return false
+    }
+    return typeof reason === 'string' && reason.trim().length > 0
+  }, [detail?.summary?.canAdminCancel, detail?.summary?.cancelBlockedReason])
 
   const dueRefunds = useMemo(
     () => detail?.refunds.filter((r) => String(r.status) === 'due') ?? [],
@@ -331,8 +343,9 @@ const MarketplaceOrderDetailPage: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+            <Box display="flex" flexDirection="column" alignItems="flex-start" gap={1}>
             <Box display="flex" flexWrap="wrap" gap={1}>
-              {showCancel && (
+              {showCancelButton && (
                 <Button variant="outlined" color="error" onClick={() => setConfirm('cancel')}>Cancel order</Button>
               )}
               {showPaymentReview && (
@@ -357,6 +370,12 @@ const MarketplaceOrderDetailPage: React.FC = () => {
                   Resolve refund dispute
                 </Button>
               )}
+            </Box>
+            {showCancelBlockedNotice && (
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 560 }}>
+                {detail.summary.cancelBlockedReason}
+              </Typography>
+            )}
             </Box>
           </>
         )}

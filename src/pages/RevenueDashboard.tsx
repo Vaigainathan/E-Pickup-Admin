@@ -15,6 +15,7 @@ import {
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { AdminColors } from '../constants/Colors'
 import AdminFetchState from '../components/AdminFetchState'
+import { formatInrCurrency } from '../utils/formatInrCurrency'
 
 interface RevenueStats {
   totalRevenue: number
@@ -43,9 +44,10 @@ const RevenueDashboard: React.FC = () => {
       setLoading(true)
       setError(null)
       const statsResponse = await comprehensiveAdminService.getRevenueStats(startDate, endDate)
-      if (statsResponse.success && statsResponse.data) {
+      if (statsResponse.success && statsResponse.data !== undefined && statsResponse.data !== null) {
         setRevenueStats(statsResponse.data as RevenueStats)
       } else {
+        setRevenueStats(null)
         setError(statsResponse.error?.message || 'Failed to load revenue data')
       }
     } catch (err) {
@@ -60,8 +62,7 @@ const RevenueDashboard: React.FC = () => {
     loadRevenueData()
   }, [loadRevenueData])
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0)
+  const formatCurrency = (amount: number) => formatInrCurrency(amount)
 
   return (
     <Box sx={{ p: 3 }}>
@@ -105,7 +106,7 @@ const RevenueDashboard: React.FC = () => {
         loading={loading && !revenueStats}
         error={error}
         onRetry={loadRevenueData}
-        empty={!loading && !error && !revenueStats}
+        empty={!loading && !!error && !revenueStats}
         emptyMessage="No revenue data for this period."
       >
       <Grid container spacing={3}>

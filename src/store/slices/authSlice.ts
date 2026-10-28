@@ -11,6 +11,20 @@ const initialState: AuthState = {
   token: null,
   loading: false,
   error: null,
+  sessionVerified: false,
+}
+
+export type VerifySessionReject =
+  | { kind: 'auth'; message: string }
+  | { kind: 'transient'; message: string }
+
+async function clearSessionOnAuthFailure(dispatch: (action: { type: 'auth/logout' }) => void) {
+  try {
+    await firebaseAuthService.signOut()
+  } catch {
+    // ignore
+  }
+  dispatch({ type: 'auth/logout' })
 }
 
 function buildUserFromBackend(firebaseUid: string, email: string | null, backendUser: any, token: string): User {
@@ -47,13 +61,18 @@ export const initializeAuth = createAsyncThunk(
   }
 )
 
-export const verifyAdminSession = createAsyncThunk(
+export const verifyAdminSession = createAsyncThunk<
+  { user: User; token: string },
+  void,
+  { rejectValue: VerifySessionReject }
+>(
   'auth/verifySession',
   async (_, { rejectWithValue, dispatch }) => {
     try {
       const token = await secureTokenStorage.getToken()
       if (!token) {
-        return rejectWithValue(mapError({ code: 'UNAUTHORIZED' }))
+        await clearSessionOnAuthFailure(dispatch)
+        return rejectWithValue({ kind: 'auth', message: mapError({ code: 'UNAUTHORIZED' }) })
       }
 
       const response = await fetch(`${API_BASE_URL}/api/admin/auth/verify-token`, {
@@ -68,18 +87,22 @@ export const verifyAdminSession = createAsyncThunk(
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         const err = { code: errorData.error?.code, status: response.status, response: { data: errorData } }
-        if (response.status === 401) {
-          dispatch(logout())
+        const message = mapError(err)
+        if (response.status === 401 || response.status === 403) {
+          await clearSessionOnAuthFailure(dispatch)
+          return rejectWithValue({ kind: 'auth', message })
         }
-        return rejectWithValue(mapError(err))
+        if (response.status >= 500) {
+          return rejectWithValue({ kind: 'transient', message })
+        }
+        return rejectWithValue({ kind: 'transient', message })
       }
 
       const data = await response.json()
       const backendUser = data.data?.user
       if (backendUser?.isActive === false) {
-        await firebaseAuthService.signOut()
-        dispatch(logout())
-        return rejectWithValue(mapError({ code: 'ACCOUNT_DISABLED' }))
+        await clearSessionOnAuthFailure(dispatch)
+        return rejectWithValue({ kind: 'auth', message: mapError({ code: 'ACCOUNT_DISABLED' }) })
       }
 
       const existing = await secureTokenStorage.getCurrentUser()
@@ -104,7 +127,8 @@ export const verifyAdminSession = createAsyncThunk(
 
       return { user: standardizedUser, token: newToken }
     } catch (error: unknown) {
-      return rejectWithValue(mapError(error))
+      const message = mapError(error)
+      return rejectWithValue({ kind: 'transient', message })
     }
   }
 )
@@ -232,6 +256,7 @@ const authSlice = createSlice({
       state.user = null
       state.token = null
       state.error = null
+      state.sessionVerified = false
       secureTokenStorage.clearTokenData()
       import('../../services/apiService').then(({ apiService }) => apiService.clearToken())
     },
@@ -268,10 +293,18 @@ const authSlice = createSlice({
         state.token = action.payload.token
         state.loading = false
         state.error = null
+        state.sessionVerified = true
       })
       .addCase(verifyAdminSession.rejected, (state, action) => {
         state.loading = false
-        if (action.payload) state.error = action.payload as string
+        const payload = action.payload
+        if (payload && typeof payload === 'object' && payload.kind === 'transient') {
+          state.sessionVerified = false
+          return
+        }
+        if (payload && typeof payload === 'object' && payload.kind === 'auth') {
+          state.error = payload.message
+        }
       })
       .addCase(loginAdmin.pending, (state) => {
         state.loading = true
@@ -280,6 +313,7 @@ const authSlice = createSlice({
       .addCase(loginAdmin.fulfilled, (state, action) => {
         state.loading = false
         state.isAuthenticated = true
+        state.sessionVerified = true
         const standardizedUser = buildUserFromBackend(
           action.payload.firebaseUid,
           action.payload.email,

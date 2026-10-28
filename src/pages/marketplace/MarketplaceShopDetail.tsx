@@ -20,19 +20,28 @@ import {
   ListItemText,
   TextField,
   Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import AdminFetchState from '../../components/AdminFetchState'
-import { SHOP_REJECT_SECTIONS } from '../../constants/marketplace'
+import { SHOP_REJECT_SECTIONS, SHOP_EARNINGS_PERIODS } from '../../constants/marketplace'
 import { isSuperAdmin } from '../../config/roleAccess'
 import { RootState } from '../../store'
 import { shopAdminService } from '../../services/shopAdminService'
 import { mapError } from '../../services/errorHandlerService'
-import type { ShopDetail } from '../../types/marketplace'
+import type { ShopDetail, ShopEarningsDetailData } from '../../types/marketplace'
 import { formatIst, maskUpiId } from '../../utils/marketplaceDisplay'
+import { marketplaceAdminService } from '../../services/marketplaceAdminService'
+import { ApiRequestError } from '../../services/apiService'
+import { formatInrCurrency } from '../../utils/formatInrCurrency'
 
 function DocumentViewButton({ label, href }: { label: string; href?: string | null }) {
   if (!href) {
@@ -73,6 +82,8 @@ const MarketplaceShopDetail: React.FC = () => {
   const [upiDiffersMode, setUpiDiffersMode] = useState(false)
   const [differingUpiName, setDifferingUpiName] = useState('')
   const [sections, setSections] = useState<string[]>([])
+  const [shopEarnings, setShopEarnings] = useState<ShopEarningsDetailData | null>(null)
+  const [earningsLoading, setEarningsLoading] = useState(false)
 
   const load = useCallback(async () => {
     if (!shopId) return
@@ -90,6 +101,28 @@ const MarketplaceShopDetail: React.FC = () => {
   useEffect(() => {
     load()
   }, [load])
+
+  const loadShopEarnings = useCallback(async () => {
+    if (!shopId || !canMutate) return
+    try {
+      setEarningsLoading(true)
+      setShopEarnings(await marketplaceAdminService.getShopEarnings(shopId))
+    } catch (err: unknown) {
+      if (err instanceof ApiRequestError && err.status === 403) {
+        console.warn('Shop earnings detail forbidden')
+        setShopEarnings(null)
+        return
+      }
+      console.error('Failed to load shop earnings', err)
+      setShopEarnings(null)
+    } finally {
+      setEarningsLoading(false)
+    }
+  }, [shopId, canMutate])
+
+  useEffect(() => {
+    loadShopEarnings()
+  }, [loadShopEarnings])
 
   const userRecord = shop?.user as {
     name?: string
@@ -275,6 +308,66 @@ const MarketplaceShopDetail: React.FC = () => {
                 </Card>
               </Grid>
             </Grid>
+
+            {canMutate && (
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>Earnings</Typography>
+                    {earningsLoading && !shopEarnings ? (
+                      <Typography variant="body2" color="text.secondary">Loading earnings…</Typography>
+                    ) : shopEarnings ? (
+                      <>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                          {shopEarnings.currency} · {shopEarnings.timezone} · As of{' '}
+                          {formatIst(shopEarnings.asOf)}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          Refunds due: {shopEarnings.refundsDue?.count ?? 0} (
+                          {formatInrCurrency(shopEarnings.refundsDue?.amount ?? 0)})
+                        </Typography>
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Period</TableCell>
+                                <TableCell align="right">Received</TableCell>
+                                <TableCell align="right">Refunded</TableCell>
+                                <TableCell align="right">Net</TableCell>
+                                <TableCell align="right">Paid</TableCell>
+                                <TableCell align="right">Completed</TableCell>
+                                <TableCell align="right">Cancelled</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {SHOP_EARNINGS_PERIODS.map(({ value, label }) => {
+                                const row = shopEarnings.periods?.[value]
+                                if (!row) return null
+                                return (
+                                  <TableRow key={value}>
+                                    <TableCell>{label}</TableCell>
+                                    <TableCell align="right">{formatInrCurrency(row.received)}</TableCell>
+                                    <TableCell align="right">{formatInrCurrency(row.refunded)}</TableCell>
+                                    <TableCell align="right">{formatInrCurrency(row.net)}</TableCell>
+                                    <TableCell align="right">{row.paidOrders}</TableCell>
+                                    <TableCell align="right">{row.completedOrders ?? '—'}</TableCell>
+                                    <TableCell align="right">{row.cancelledOrders ?? '—'}</TableCell>
+                                  </TableRow>
+                                )
+                              })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Earnings data is not available yet.
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
 
             {actionError && <Alert severity="error" sx={{ mb: 2 }}>{actionError}</Alert>}
             {canMutate && (showApprove || showReject || showVerifyUpi || showSuspend || showUnsuspend) && (

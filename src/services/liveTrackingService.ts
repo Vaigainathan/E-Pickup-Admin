@@ -3,6 +3,7 @@
  * Handles real-time tracking data and driver monitoring
  */
 
+import { apiService } from './apiService';
 import { secureTokenStorage } from './secureTokenStorage';
 import { API_BASE_URL } from '../config/apiConfig';
 
@@ -86,6 +87,38 @@ class LiveTrackingService {
     this.baseUrl = API_BASE_URL;
   }
 
+  private parseActiveBookings(data: unknown): BookingWithTracking[] {
+    if (Array.isArray(data)) return data as BookingWithTracking[]
+    const obj = data as { bookings?: BookingWithTracking[] }
+    return obj?.bookings ?? []
+  }
+
+  private parseOnlineDrivers(data: unknown): DriverLocation[] {
+    if (Array.isArray(data)) return data as DriverLocation[]
+    const obj = data as { drivers?: DriverLocation[] }
+    return obj?.drivers ?? []
+  }
+
+  private async fetchActiveBookingsList(): Promise<BookingWithTracking[]> {
+    const response = await apiService.get('/api/admin/bookings/active')
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to load bookings')
+    }
+    return this.parseActiveBookings(response.data)
+  }
+
+  /** Staging may ignore `online=true` until backend release — list can include all drivers. */
+  private async fetchOnlineDriversList(): Promise<DriverLocation[]> {
+    const response = await apiService.get('/api/admin/drivers', {
+      online: true,
+      includeLocation: true,
+    })
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to load drivers')
+    }
+    return this.parseOnlineDrivers(response.data)
+  }
+
   /**
    * Set up event callbacks
    */
@@ -151,24 +184,8 @@ class LiveTrackingService {
    */
   private async loadActiveBookings() {
     try {
-      const response = await fetch(`${this.baseUrl}/api/admin/bookings?status=active&includeTracking=true`, {
-        headers: {
-          'Authorization': `Bearer ${await secureTokenStorage.getToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        this.callbacks.onBookingsUpdate?.(data.data.bookings || []);
-      } else {
-        throw new Error(data.error || 'Failed to load bookings');
-      }
+      const bookings = await this.fetchActiveBookingsList()
+      this.callbacks.onBookingsUpdate?.(bookings)
     } catch (error) {
       console.error('❌ [LIVE_TRACKING] Error loading active bookings:', error);
       this.callbacks.onError?.(error instanceof Error ? error.message : 'Failed to load active bookings');
@@ -180,24 +197,8 @@ class LiveTrackingService {
    */
   private async loadOnlineDrivers() {
     try {
-      const response = await fetch(`${this.baseUrl}/api/admin/drivers?status=online&includeLocation=true`, {
-        headers: {
-          'Authorization': `Bearer ${await secureTokenStorage.getToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        this.callbacks.onDriversUpdate?.(data.data.drivers || []);
-      } else {
-        throw new Error(data.error || 'Failed to load drivers');
-      }
+      const drivers = await this.fetchOnlineDriversList()
+      this.callbacks.onDriversUpdate?.(drivers)
     } catch (error) {
       console.error('❌ [LIVE_TRACKING] Error loading online drivers:', error);
       this.callbacks.onError?.(error instanceof Error ? error.message : 'Failed to load online drivers');
@@ -382,24 +383,8 @@ class LiveTrackingService {
    */
   async getLiveBookings(): Promise<{ success: boolean; data?: BookingWithTracking[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/admin/bookings?status=active&includeTracking=true`, {
-        headers: {
-          'Authorization': `Bearer ${await secureTokenStorage.getToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        return { success: true, data: data.data.bookings || [] };
-      } else {
-        return { success: false, error: data.error || 'Failed to load bookings' };
-      }
+      const bookings = await this.fetchActiveBookingsList()
+      return { success: true, data: bookings }
     } catch (error) {
       console.error('❌ [LIVE_TRACKING] Error getting live bookings:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Failed to load bookings' };
@@ -411,24 +396,8 @@ class LiveTrackingService {
    */
   async getOnlineDrivers(): Promise<{ success: boolean; data?: DriverLocation[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/admin/drivers?status=online&includeLocation=true`, {
-        headers: {
-          'Authorization': `Bearer ${await secureTokenStorage.getToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        return { success: true, data: data.data.drivers || [] };
-      } else {
-        return { success: false, error: data.error || 'Failed to load drivers' };
-      }
+      const drivers = await this.fetchOnlineDriversList()
+      return { success: true, data: drivers }
     } catch (error) {
       console.error('❌ [LIVE_TRACKING] Error getting online drivers:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Failed to load drivers' };

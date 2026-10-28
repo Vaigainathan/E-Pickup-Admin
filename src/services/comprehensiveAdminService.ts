@@ -1,7 +1,8 @@
-import { apiService } from './apiService'
+import { apiService, ApiRequestError } from './apiService'
 import { realTimeService } from './realTimeService'
 import { emergencyService } from './emergencyService'
 import { Driver, Booking, EmergencyAlert, SupportTicket, SystemHealth, Customer } from '../types'
+import type { DashboardCountsData } from '../utils/mapDashboardCounts'
 
 interface AdminServiceResponse<T = any> {
   success: boolean
@@ -16,6 +17,7 @@ interface AdminServiceResponse<T = any> {
     page: number
     limit: number
     total: number
+    totalCount?: number
     hasMore: boolean
   }
   timestamp?: string
@@ -27,6 +29,28 @@ class ComprehensiveAdminService {
   private isInitialized = false
   private realTimeListeners: Map<string, () => void> = new Map()
   private cleanupFunctions: (() => void)[] = []
+
+  private extractPagination(
+    response: { pagination?: unknown; data?: unknown },
+    validatedPage: number,
+    validatedLimit: number,
+    listLength: number,
+  ): AdminServiceResponse<unknown>['pagination'] {
+    const dataObj = response.data as { pagination?: Record<string, number> } | undefined
+    const topPagination = response.pagination as Record<string, number> | undefined
+    const pagination = dataObj?.pagination ?? topPagination
+    const totalCount =
+      pagination?.totalCount ??
+      pagination?.total ??
+      listLength
+    return {
+      page: pagination?.page ?? validatedPage,
+      limit: pagination?.limit ?? validatedLimit,
+      total: totalCount,
+      totalCount,
+      hasMore: Boolean(pagination?.hasMore ?? listLength === validatedLimit),
+    }
+  }
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return
@@ -224,17 +248,15 @@ class ComprehensiveAdminService {
       
       if (response.success && response.data) {
         console.log('✅ Drivers fetched successfully')
-        // The backend now returns normalized verification data
+        const data = response.data
+        const driverList = Array.isArray(data)
+          ? data
+          : (data as { drivers?: Driver[] }).drivers ?? []
         return {
           success: true,
-          data: (response.data as Driver[]) || [],
+          data: driverList,
           message: 'Drivers fetched successfully',
-          pagination: {
-            page: validatedPage,
-            limit: validatedLimit,
-            total: Array.isArray(response.data) ? response.data.length : 0,
-            hasMore: Array.isArray(response.data) ? response.data.length === validatedLimit : false
-          },
+          pagination: this.extractPagination(response, validatedPage, validatedLimit, driverList.length),
           timestamp: new Date().toISOString()
         }
       }
@@ -322,7 +344,8 @@ class ComprehensiveAdminService {
         return {
           success: true,
           data: list,
-          message: 'Bookings fetched successfully'
+          message: 'Bookings fetched successfully',
+          pagination: this.extractPagination(response, 1, params?.limit ?? 20, list.length),
         }
       }
       
@@ -577,6 +600,45 @@ class ComprehensiveAdminService {
           code: 'FETCH_REVENUE_ERROR',
           message: 'Failed to fetch revenue summary'
         }
+      }
+    }
+  }
+
+  async getDashboardCounts(): Promise<
+    AdminServiceResponse<DashboardCountsData> & { notFound?: boolean }
+  > {
+    try {
+      const response = await apiService.get<DashboardCountsData>('/api/admin/dashboard/counts')
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          message: 'Dashboard counts fetched successfully',
+          timestamp: new Date().toISOString(),
+        }
+      }
+      return {
+        success: false,
+        error: {
+          code: response.error?.code || 'FETCH_DASHBOARD_COUNTS_ERROR',
+          message: response.error?.message || 'Failed to fetch dashboard counts',
+        },
+      }
+    } catch (error: unknown) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        return {
+          success: false,
+          notFound: true,
+          error: { code: 'NOT_FOUND', message: 'Dashboard counts not available' },
+        }
+      }
+      console.error('❌ Error fetching dashboard counts:', error)
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_DASHBOARD_COUNTS_ERROR',
+          message: 'Failed to fetch dashboard counts',
+        },
       }
     }
   }
@@ -869,12 +931,10 @@ class ComprehensiveAdminService {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       })
-      
-      const stats = (response as { stats?: unknown }).stats
-        ?? (response.data as { stats?: unknown })?.stats
-        ?? response.data
 
-      if (response.success && stats) {
+      const stats = (response as { stats?: unknown }).stats
+
+      if (response.success && stats !== undefined && stats !== null) {
         console.log('✅ Revenue statistics fetched successfully')
         return {
           success: true,

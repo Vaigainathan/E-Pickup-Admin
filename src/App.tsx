@@ -26,6 +26,7 @@ const MarketplaceShopDetail = lazy(() => import('./pages/marketplace/Marketplace
 const MarketplaceOrders = lazy(() => import('./pages/marketplace/MarketplaceOrders'))
 const MarketplaceOrderDetail = lazy(() => import('./pages/marketplace/MarketplaceOrderDetail'))
 const MarketplaceHelp = lazy(() => import('./pages/marketplace/MarketplaceHelp'))
+const MarketplaceShopEarnings = lazy(() => import('./pages/marketplace/MarketplaceShopEarnings'))
 
 const PageLoader = () => (
   <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -70,6 +71,14 @@ function App() {
             <Route path="/marketplace/orders" element={<ErrorBoundary><MarketplaceOrders /></ErrorBoundary>} />
             <Route path="/marketplace/orders/:orderId" element={<ErrorBoundary><MarketplaceOrderDetail /></ErrorBoundary>} />
             <Route path="/marketplace/help" element={<ErrorBoundary><MarketplaceHelp /></ErrorBoundary>} />
+            <Route
+              path="/marketplace/earnings"
+              element={
+                <SuperAdminRoute>
+                  <ErrorBoundary><MarketplaceShopEarnings /></ErrorBoundary>
+                </SuperAdminRoute>
+              }
+            />
             <Route
               path="/analytics"
               element={

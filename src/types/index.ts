@@ -19,6 +19,8 @@ export interface AuthState {
   token: string | null
   loading: boolean
   error: string | null
+  /** False when verify-token could not run (network/5xx); session kept until next load. */
+  sessionVerified: boolean
 }
 
 // Driver Types

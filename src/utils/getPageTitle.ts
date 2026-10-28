@@ -10,6 +10,7 @@ const MENU_ROUTES: { path: string; title: string }[] = [
   { path: '/marketplace/shops', title: 'Shops' },
   { path: '/marketplace/orders', title: 'Orders' },
   { path: '/marketplace/help', title: 'Help' },
+  { path: '/marketplace/earnings', title: 'Shop earnings' },
   { path: '/revenue', title: 'Revenue' },
   { path: '/analytics', title: 'Analytics' },
   { path: '/admin-management', title: 'Admin Management' },

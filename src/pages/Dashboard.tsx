@@ -58,6 +58,8 @@ import { useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { RootState } from '../store'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
+import { formatInrCurrency } from '../utils/formatInrCurrency'
+import { mapDashboardCounts, type DashboardCountOverrides } from '../utils/mapDashboardCounts'
 import { websocketService } from '../services/websocketService'
 import { secureTokenStorage } from '../services/secureTokenStorage'
 import { AdminColors } from '../constants/Colors'
@@ -215,6 +217,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   // Revenue state
   const [revenueLoading, setRevenueLoading] = useState(false)
   const [revenueData, setRevenueData] = useState<any>(null)
+  const [countOverrides, setCountOverrides] = useState<DashboardCountOverrides | null>(null)
   
   // Verification statistics state
   const [verificationStats, setVerificationStats] = useState<any>(null)
@@ -669,6 +672,19 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     }
   }, [])
 
+  const fetchDashboardCounts = useCallback(async () => {
+    try {
+      const response = await comprehensiveAdminService.getDashboardCounts()
+      if (response.success && response.data) {
+        setCountOverrides(mapDashboardCounts(response.data))
+      } else {
+        setCountOverrides(null)
+      }
+    } catch {
+      setCountOverrides(null)
+    }
+  }, [])
+
   // Fetch revenue data
   const fetchRevenue = useCallback(async () => {
     if (!canViewRevenue) {
@@ -738,7 +754,8 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         fetchSystemHealth(),
         fetchCustomers(),
         fetchRevenue(),
-        fetchVerificationStats()
+        fetchVerificationStats(),
+        fetchDashboardCounts(),
       ])
       
       setLastUpdated(new Date())
@@ -750,7 +767,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     } finally {
       setIsLoading(false)
     }
-  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers, fetchRevenue, fetchVerificationStats])
+  }, [isInitialized, fetchDrivers, fetchBookings, fetchEmergencyAlerts, fetchSupportTickets, fetchSystemHealth, fetchCustomers, fetchRevenue, fetchVerificationStats, fetchDashboardCounts])
 
   // Initial data fetch
   useEffect(() => {
@@ -769,13 +786,13 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
 
   // Memoized metrics calculation with null safety
   const metrics = useMemo(() => {
-    const totalDrivers = drivers?.length || 0
+    const totalDrivers = countOverrides?.driversTotal ?? drivers?.length ?? 0
     const activeDrivers = drivers?.filter(d => d?.isActive === true).length || 0
-    const verifiedDrivers = drivers?.filter(d => d?.isVerified === true).length || 0
+    const verifiedDrivers = countOverrides?.driversVerified ?? drivers?.filter(d => d?.isVerified === true).length ?? 0
     const pendingVerifications = drivers?.filter(d => d?.isVerified !== true).length || 0
 
     const totalBookings = bookings?.length || 0
-    const activeBookings = bookings?.filter(b => ['pending', 'accepted', 'in_progress'].includes(b?.status)).length || 0
+    const activeBookings = countOverrides?.bookingsActive ?? bookings?.filter(b => ['pending', 'accepted', 'in_progress'].includes(b?.status)).length ?? 0
     const completedBookings = bookings?.filter(b => b?.status === 'completed').length || 0
 
     const totalAlerts = emergencyAlerts?.length || 0
@@ -786,7 +803,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
     const openTickets = supportTickets?.filter(t => t?.status === 'open').length || 0
     const resolvedTickets = supportTickets?.filter(t => t?.status === 'resolved').length || 0
 
-    const totalCustomers = customers?.length || 0
+    const totalCustomers = countOverrides?.customersTotal ?? customers?.length ?? 0
     const activeCustomers = customers?.filter(c => c?.accountStatus === 'active').length || 0
     const suspendedCustomers = customers?.filter(c => c?.accountStatus === 'suspended').length || 0
     const bannedCustomers = customers?.filter(c => c?.accountStatus === 'banned').length || 0
@@ -823,6 +840,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
   }, [
     drivers?.length,
     bookings?.length,
+    countOverrides,
     emergencyAlerts?.length,
     supportTickets?.length,
     customers?.length,
@@ -1412,10 +1430,18 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Revenue"
-            value={revenueData ? `₹${(revenueData.thisMonth?.total || 0).toLocaleString()}` : '₹0'}
+            value={
+              revenueData
+                ? formatInrCurrency(revenueData.thisMonthRevenue ?? 0)
+                : formatInrCurrency(0)
+            }
             icon={<MoneyIcon />}
             color={AdminColors.revenue}
-            subtitle={revenueData?.thisMonth?.topUps ? `${revenueData.thisMonth.topUps} top-ups this month` : 'This month'}
+            subtitle={
+              typeof revenueData?.transactionCount === 'number'
+                ? `${revenueData.transactionCount} transactions this month`
+                : 'This month'
+            }
             loading={revenueLoading}
             onClick={() => navigate('/revenue')}
           />
@@ -1430,7 +1456,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
             color={AdminColors.analytics}
             subtitle="Real-time data"
             loading={false}
-            onClick={() => navigate('/revenue')}
+            onClick={() => navigate('/analytics')}
           />
         </Grid>
 
@@ -1713,7 +1739,7 @@ const ComprehensiveDashboard: React.FC = React.memo(() => {
                 <Button
                   variant="outlined"
                   startIcon={<AnalyticsIcon />}
-                  onClick={() => navigate('/revenue')}
+                  onClick={() => navigate('/analytics')}
                   sx={{ minWidth: 120 }}
                 >
                   Analytics

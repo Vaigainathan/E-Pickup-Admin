@@ -46,6 +46,7 @@ import { useSelector } from 'react-redux'
 import { useAppDispatch } from '../hooks/redux'
 import { RootState } from '../store'
 import { logout } from '../store/slices/authSlice'
+import { firebaseAuthService } from '../services/firebaseAuthService'
 import { AdminColors } from '../constants/Colors'
 import { canAccessRoute } from '../config/roleAccess'
 import { getPageTitle } from '../utils/getPageTitle'
@@ -70,6 +71,7 @@ const menuItems: MenuEntry[] = [
   { text: 'Shops', icon: <StorefrontIcon />, path: '/marketplace/shops', section: 'Marketplace' },
   { text: 'Orders', icon: <ReceiptIcon />, path: '/marketplace/orders', section: 'Marketplace' },
   { text: 'Help', icon: <HelpOutlineIcon />, path: '/marketplace/help', section: 'Marketplace' },
+  { text: 'Shop earnings', icon: <RevenueIcon />, path: '/marketplace/earnings', section: 'Marketplace' },
   { text: 'Revenue', icon: <RevenueIcon />, path: '/revenue' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
   { text: 'Admin Management', icon: <AdminPanelIcon />, path: '/admin-management' },
@@ -102,10 +104,15 @@ const Layout: React.FC<LayoutProps> = React.memo(({ children }) => {
     setAnchorEl(null)
   }, [])
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    handleProfileMenuClose()
+    try {
+      await firebaseAuthService.signOut()
+    } catch {
+      // ignore
+    }
     dispatch(logout())
     navigate('/login')
-    handleProfileMenuClose()
   }, [dispatch, navigate, handleProfileMenuClose])
 
   const handleNavigation = useCallback((path: string) => {

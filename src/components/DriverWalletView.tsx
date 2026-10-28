@@ -60,8 +60,7 @@ const DriverWalletView: React.FC<DriverWalletViewProps> = ({ driverId, driverNam
     try {
       setLoading(true)
       setError(null)
-      const response = await comprehensiveAdminService.getDriverWallet?.(driverId) || 
-                       await fetch(`/api/admin/drivers/${driverId}/wallet`).then(r => r.json())
+      const response = await comprehensiveAdminService.getDriverWallet(driverId)
       
       if (response.success && response.data) {
         setWalletData(response.data)

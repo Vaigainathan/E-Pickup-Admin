@@ -27,6 +27,8 @@ interface LiveTrackingMapProps {
   onDriverSelect?: (driver: any) => void;
   bookings?: Booking[];
   drivers?: Driver[];
+  /** When true, renders side lists + detail panel (for reuse outside Live Tracking page). Default false. */
+  showSidePanels?: boolean;
 }
 
 interface Booking {
@@ -66,7 +68,8 @@ const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   onBookingSelect,
   onDriverSelect,
   bookings = [],
-  drivers = []
+  drivers = [],
+  showSidePanels = false,
 }) => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
@@ -96,7 +99,23 @@ const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
     }
   };
 
-  // Render
+  const mapBlock = (
+    <Paper sx={{ p: 2, height: showSidePanels ? '500px' : '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Box textAlign="center">
+        <LocationIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+        <Typography variant="h6" color="text.secondary">
+          Interactive Map View
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {bookings.length} active bookings, {drivers.filter(d => d.isOnline).length} online drivers
+        </Typography>
+      </Box>
+    </Paper>
+  );
+
+  if (!showSidePanels) {
+    return mapBlock;
+  }
 
   return (
     <Box sx={{ p: 2 }}>
@@ -117,22 +136,10 @@ const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
       </Box>
 
       <Grid container spacing={2}>
-        {/* Map Placeholder */}
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2, height: '500px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Box textAlign="center">
-              <LocationIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary">
-                Interactive Map View
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {bookings.length} active bookings, {drivers.filter(d => d.isOnline).length} online drivers
-              </Typography>
-            </Box>
-          </Paper>
+          {mapBlock}
         </Grid>
 
-        {/* Active Bookings */}
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
@@ -180,7 +187,6 @@ const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
           </Card>
         </Grid>
 
-        {/* Online Drivers */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
@@ -224,7 +230,6 @@ const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
           </Card>
         </Grid>
 
-        {/* Selected Item Details */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>

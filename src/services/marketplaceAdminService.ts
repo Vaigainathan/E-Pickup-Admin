@@ -6,7 +6,10 @@ import type {
   MarketplaceHelpTicket,
   MarketplaceOrderDetail,
   MarketplaceOrderSummary,
+  ShopEarningsDetailData,
+  ShopEarningsListData,
 } from '../types/marketplace'
+import type { ShopEarningsPeriod } from '../constants/marketplace'
 
 export interface MarketplaceOrdersList {
   orders: MarketplaceOrderSummary[]
@@ -141,6 +144,20 @@ class MarketplaceAdminService {
 
   async unrestrictCustomer(customerId: string): Promise<unknown> {
     const response = await apiService.post<unknown>(`/api/admin/marketplace/customers/${customerId}/unrestrict`, {})
+    return this.assertSuccess(response)
+  }
+
+  async listShopEarnings(period: ShopEarningsPeriod): Promise<ShopEarningsListData> {
+    const response = await apiService.get<ShopEarningsListData>('/api/admin/marketplace/shops/earnings', {
+      period,
+    })
+    return this.assertSuccess(response)
+  }
+
+  async getShopEarnings(shopId: string): Promise<ShopEarningsDetailData> {
+    const response = await apiService.get<ShopEarningsDetailData>(
+      `/api/admin/marketplace/shops/${shopId}/earnings`,
+    )
     return this.assertSuccess(response)
   }
 }

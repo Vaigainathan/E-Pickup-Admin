@@ -90,3 +90,49 @@ export interface CustomerMarketplaceRestriction {
   setAt: string | Date | null
   setBy: string | null
 }
+
+export interface ShopEarningsRefundsDue {
+  count: number
+  amount: number
+}
+
+export interface ShopEarningsListRow {
+  shopId: string
+  shopName: string
+  approvalStatus: string
+  received: number
+  refunded: number
+  net: number
+  paidOrders: number
+  refundsDue: ShopEarningsRefundsDue
+}
+
+export interface ShopEarningsListData {
+  period: string
+  asOf: string
+  shops: ShopEarningsListRow[]
+}
+
+export interface ShopEarningsPeriodMetrics {
+  received: number
+  refunded: number
+  net: number
+  paidOrders: number
+  completedOrders?: number
+  cancelledOrders?: number
+  refundsSent?: number
+}
+
+export interface ShopEarningsDetailData {
+  currency: string
+  timezone: string
+  asOf: string
+  periods: {
+    today?: ShopEarningsPeriodMetrics
+    yesterday?: ShopEarningsPeriodMetrics
+    thisMonth?: ShopEarningsPeriodMetrics
+    lastMonth?: ShopEarningsPeriodMetrics
+    allTime?: ShopEarningsPeriodMetrics
+  }
+  refundsDue: ShopEarningsRefundsDue
+}

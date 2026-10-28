@@ -60,11 +60,11 @@ const DriverEarningsView: React.FC<DriverEarningsViewProps> = ({ driverId, drive
     try {
       setLoading(true)
       setError(null)
-      const response = await comprehensiveAdminService.getDriverEarnings?.(driverId, {
+      const response = await comprehensiveAdminService.getDriverEarnings(driverId, {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         period
-      }) || await fetch(`/api/admin/drivers/${driverId}/earnings?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&period=${period}`).then(r => r.json())
+      })
       
       if (response.success && response.data) {
         setEarningsData(response.data)

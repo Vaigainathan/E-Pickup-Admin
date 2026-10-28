@@ -372,17 +372,7 @@ class ApiService {
   }
 
   async logout() {
-    try {
-      const response = await this.request('/api/auth/logout', {
-        method: 'POST'
-      })
-      
-      this.clearToken()
-      return response
-    } catch (error) {
-      this.clearToken()
-      throw error
-    }
+    this.clearToken()
   }
 
   // ==================== DRIVER MANAGEMENT ====================

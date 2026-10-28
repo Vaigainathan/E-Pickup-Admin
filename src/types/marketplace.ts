@@ -51,6 +51,7 @@ export interface MarketplaceOrderSummary {
   amount?: number | null
   customerUtrLast4?: string | null
   linkedBookingId?: string | null
+  canAdminCancel?: boolean
   createdAt?: unknown
   updatedAt?: unknown
 }

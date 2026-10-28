@@ -26,7 +26,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import AdminFetchState from '../../components/AdminFetchState'
 import { marketplaceAdminService } from '../../services/marketplaceAdminService'
-import { mapError } from '../../services/errorHandlerService'
+import { resolveErrorMessage } from '../../services/errorHandlerService'
 import { RootState } from '../../store'
 import type { MarketplaceOrderDetail } from '../../types/marketplace'
 import {
@@ -68,7 +68,7 @@ const MarketplaceOrderDetailPage: React.FC = () => {
       setError(null)
       setDetail(await marketplaceAdminService.getOrder(orderId))
     } catch (err: unknown) {
-      setError(mapError({ code: (err as { code?: string })?.code }))
+      setError(resolveErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -87,7 +87,17 @@ const MarketplaceOrderDetailPage: React.FC = () => {
     orderStatus === 'cancelled' &&
     cancellation.reason === 'customer_cancel' &&
     cancellation.paidCheck === 'pending'
-  const showCancel = detail && !TERMINAL_ORDER_STATUSES.has(orderStatus)
+  const showCancel = useMemo(() => {
+    if (!detail) return false
+    const flag = detail.summary?.canAdminCancel
+    if (typeof flag === 'boolean') {
+      return flag
+    }
+    if (orderStatus === 'handed_over' || orderStatus === 'completed') {
+      return false
+    }
+    return !TERMINAL_ORDER_STATUSES.has(orderStatus)
+  }, [detail, orderStatus])
 
   const dueRefunds = useMemo(
     () => detail?.refunds.filter((r) => String(r.status) === 'due') ?? [],
@@ -122,7 +132,7 @@ const MarketplaceOrderDetailPage: React.FC = () => {
       closeConfirm()
       await load()
     } catch (err: unknown) {
-      setActionError(mapError({ code: (err as { code?: string })?.code }))
+      setActionError(resolveErrorMessage(err))
     }
   }
 

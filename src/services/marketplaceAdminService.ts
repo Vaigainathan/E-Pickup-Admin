@@ -1,6 +1,6 @@
 import { apiService, ApiRequestError } from './apiService'
 import type { ApiResponse } from '../types'
-import { mapError } from './errorHandlerService'
+import { resolveErrorMessage } from './errorHandlerService'
 import type {
   MarketplaceEnforcement,
   MarketplaceHelpTicket,
@@ -25,7 +25,7 @@ class MarketplaceAdminService {
     }
     throw new ApiRequestError(
       response.error?.code || 'UNKNOWN_ERROR',
-      mapError({ code: response.error?.code, message: response.error?.message }),
+      resolveErrorMessage({ code: response.error?.code, apiMessage: response.error?.message }),
     )
   }
 

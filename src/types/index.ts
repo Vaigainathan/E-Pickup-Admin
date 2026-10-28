@@ -290,6 +290,8 @@ export interface Booking {
     performedBy: string
     performedAt: string
   }>
+  /** When present (GET booking), admin may only set these statuses */
+  allowedAdminTransitions?: string[]
 }
 
 export interface VerificationDetail {

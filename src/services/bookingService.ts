@@ -1,6 +1,6 @@
 import { apiService } from './apiService'
 import { Booking, PaginationParams, FilterParams } from '../types'
-import { mapError } from './errorHandlerService'
+import { mapError, resolveErrorMessage } from './errorHandlerService'
 import { ApiRequestError } from './apiService'
 
 interface BookingsResponse {
@@ -45,7 +45,7 @@ class BookingService {
     }
     throw new ApiRequestError(
       response.error?.code || 'UNKNOWN_ERROR',
-      mapError({ code: response.error?.code }),
+      resolveErrorMessage({ code: response.error?.code, apiMessage: response.error?.message }),
     )
   }
 
@@ -56,31 +56,25 @@ class BookingService {
     }
     throw new ApiRequestError(
       response.error?.code || 'UNKNOWN_ERROR',
-      mapError({ code: response.error?.code }),
+      resolveErrorMessage({ code: response.error?.code, apiMessage: response.error?.message }),
     )
   }
 
   async interveneBooking(
     bookingId: string,
-    action: 'reassign_driver' | 'cancel_booking' | 'update_fare' | 'send_notification',
+    action: 'cancel' | 'reassign',
     reason: string,
-    details?: {
-      newDriverId?: string
-      newFare?: number
-      notificationMessage?: string
-    }
   ): Promise<{ action: string; message: string; data?: any }> {
     const response = await apiService.post(`/api/admin/bookings/${bookingId}/intervene`, {
       action,
       reason,
-      ...details,
     })
     if (response.success && response.data) {
       return response.data as any
     }
     throw new ApiRequestError(
       response.error?.code || 'UNKNOWN_ERROR',
-      mapError({ code: response.error?.code }),
+      resolveErrorMessage({ code: response.error?.code, apiMessage: response.error?.message }),
     )
   }
 
@@ -91,7 +85,7 @@ class BookingService {
     }
     throw new ApiRequestError(
       response.error?.code || 'UNKNOWN_ERROR',
-      mapError({ code: response.error?.code }),
+      resolveErrorMessage({ code: response.error?.code, apiMessage: response.error?.message }),
     )
   }
 }

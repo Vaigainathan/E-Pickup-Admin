@@ -175,6 +175,75 @@ class ErrorHandlerService {
       action: 'Wait a moment and try again'
     },
 
+    'CANCEL_NOT_ALLOWED': {
+      code: 'CANCEL_NOT_ALLOWED',
+      message: 'This order cannot be cancelled in its current state.',
+      severity: 'error',
+      retryable: false,
+      action: 'Check order status or use Booking Management for the linked trip'
+    },
+    'INVALID_ACTION': {
+      code: 'INVALID_ACTION',
+      message: 'That intervention action is not supported.',
+      severity: 'error',
+      retryable: false,
+    },
+    'INVALID_STATUS': {
+      code: 'INVALID_STATUS',
+      message: 'That booking status is not allowed.',
+      severity: 'warning',
+      retryable: true,
+    },
+    'INVALID_TRANSITION': {
+      code: 'INVALID_TRANSITION',
+      message: 'That status change is not allowed for this order or booking.',
+      severity: 'error',
+      retryable: false,
+    },
+    'USE_ORDER_ACTIONS': {
+      code: 'USE_ORDER_ACTIONS',
+      message: 'Use Marketplace order actions for this booking instead of generic status edits.',
+      severity: 'info',
+      retryable: false,
+    },
+    'UPDATE_BOOKING_STATUS_ERROR': {
+      code: 'UPDATE_BOOKING_STATUS_ERROR',
+      message: 'Could not update booking status. Try again or contact support.',
+      severity: 'error',
+      retryable: true,
+      action: 'Try again'
+    },
+    'BOOKING_INTERVENTION_ERROR': {
+      code: 'BOOKING_INTERVENTION_ERROR',
+      message: 'Could not complete booking intervention. Try again or contact support.',
+      severity: 'error',
+      retryable: true,
+    },
+    'CANCEL_ORDER_ERROR': {
+      code: 'CANCEL_ORDER_ERROR',
+      message: 'Could not cancel this marketplace order.',
+      severity: 'error',
+      retryable: true,
+    },
+    'HTTP_400': {
+      code: 'HTTP_400',
+      message: 'The request was invalid. Please check your input and try again.',
+      severity: 'warning',
+      retryable: true,
+    },
+    'HTTP_409': {
+      code: 'HTTP_409',
+      message: 'This action is not allowed in the current state.',
+      severity: 'error',
+      retryable: false,
+    },
+    'HTTP_422': {
+      code: 'HTTP_422',
+      message: 'The request could not be processed. Please check the details and try again.',
+      severity: 'warning',
+      retryable: true,
+    },
+
     // Default error
     'UNKNOWN_ERROR': {
       code: 'UNKNOWN_ERROR',
@@ -196,8 +265,26 @@ class ErrorHandlerService {
       return this.errorMessages.NETWORK_ERROR!;
     }
 
-    // HTTP status errors
+    const apiErrorPayload = error.response?.data?.error ?? error.response?.error;
+    const apiCode =
+      (typeof apiErrorPayload?.code === 'string' && apiErrorPayload.code) ||
+      (typeof error?.code === 'string' && error.code.startsWith('HTTP_') ? null : error?.code) ||
+      null;
+
+    if (apiCode && this.errorMessages[apiCode]) {
+      return { ...this.errorMessages[apiCode]! };
+    }
+
+    if (error?.code && this.errorMessages[error.code]) {
+      return { ...this.errorMessages[error.code]! };
+    }
+
+    // HTTP status errors (after known API codes)
     if (error.status) {
+      const httpKey = `HTTP_${error.status}`;
+      if (this.errorMessages[httpKey]) {
+        return { ...this.errorMessages[httpKey]! };
+      }
       switch (error.status) {
         case 401:
           return this.errorMessages.UNAUTHORIZED!;
@@ -219,18 +306,9 @@ class ErrorHandlerService {
       }
     }
 
-    // API response errors
-    if (error.response?.data?.error) {
-      const apiError = error.response.data.error;
-      const errorCode = apiError.code || 'UNKNOWN_ERROR';
-      
-      if (this.errorMessages[errorCode]) {
-        return { ...this.errorMessages[errorCode]! };
-      }
-    }
-
-    if (error?.code && this.errorMessages[error.code]) {
-      return { ...this.errorMessages[error.code]! };
+    // API response errors (unknown code)
+    if (apiErrorPayload?.code && this.errorMessages[apiErrorPayload.code]) {
+      return { ...this.errorMessages[apiErrorPayload.code]! };
     }
 
     // Firebase Auth errors
@@ -297,9 +375,19 @@ class ErrorHandlerService {
    * Create custom error for HTTP status codes
    */
   private createCustomError(status: number, statusText: string): ErrorInfo {
+    const httpKey = `HTTP_${status}`;
+    if (this.errorMessages[httpKey]) {
+      return { ...this.errorMessages[httpKey]! };
+    }
+    const readable =
+      status >= 500
+        ? 'Something went wrong on the server. Please try again later.'
+        : status >= 400
+          ? 'The request could not be completed. Please check the details and try again.'
+          : `Request failed (${status}${statusText ? `: ${statusText}` : ''}).`;
     return {
-      code: `HTTP_${status}`,
-      message: `Request failed with status ${status}: ${statusText}`,
+      code: httpKey,
+      message: readable,
       severity: 'error',
       retryable: status >= 500,
       action: status >= 500 ? 'Try again later' : 'Please check your request'
@@ -363,12 +451,64 @@ class ErrorHandlerService {
 
 export const errorHandlerService = new ErrorHandlerService();
 
-/** User-facing message only — never exposes raw server/Firebase text */
+function extractServerMessage(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const e = error as Record<string, unknown>;
+  if (typeof e.serverMessage === 'string' && e.serverMessage.trim()) {
+    return e.serverMessage.trim();
+  }
+  if (typeof e.message === 'string' && e.name === 'ApiRequestError') {
+    // Already formatted by resolveErrorMessage
+    return undefined;
+  }
+  const response = e.response as { data?: { error?: { message?: string } }; error?: { message?: string } } | undefined;
+  const fromResponse =
+    response?.data?.error?.message ||
+    response?.error?.message ||
+    (typeof e.apiMessage === 'string' ? e.apiMessage : undefined);
+  if (typeof fromResponse === 'string' && fromResponse.trim()) {
+    return fromResponse.trim();
+  }
+  if (typeof e.message === 'string' && !e.message.startsWith('Request failed with status')) {
+    return e.message.trim();
+  }
+  return undefined;
+}
+
+/** User-facing message; appends backend detail when present and distinct from the mapped copy. */
+export function resolveErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && (error as Error).name === 'ApiRequestError') {
+    return (error as Error).message;
+  }
+  const serverMessage = extractServerMessage(error);
+  const info = errorHandlerService.handleError(error);
+  if (!serverMessage) {
+    return info.message;
+  }
+  const normalizedServer = serverMessage.replace(/\s+/g, ' ').trim();
+  const normalizedFriendly = info.message.replace(/\s+/g, ' ').trim();
+  if (
+    normalizedServer === normalizedFriendly ||
+    normalizedFriendly.includes(normalizedServer)
+  ) {
+    return info.message;
+  }
+  return `${info.message} (${normalizedServer})`;
+}
+
 export function mapError(error: unknown): string {
-  return errorHandlerService.handleError(error).message;
+  return resolveErrorMessage(error);
 }
 
 export function mapErrorCode(error: unknown): string {
+  const e = error as { code?: string; response?: { data?: { error?: { code?: string } } } };
+  const apiCode = e.response?.data?.error?.code;
+  if (typeof apiCode === 'string' && apiCode) {
+    return apiCode;
+  }
+  if (typeof e.code === 'string' && e.code && !e.code.startsWith('HTTP_')) {
+    return e.code;
+  }
   return errorHandlerService.handleError(error).code;
 }
 

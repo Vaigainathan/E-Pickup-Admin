@@ -1,7 +1,7 @@
 import { ApiResponse } from '../types'
 import { secureTokenStorage } from './secureTokenStorage'
 import { API_BASE_URL } from '../config/apiConfig'
-import { mapError, mapErrorCode } from './errorHandlerService'
+import { mapError, mapErrorCode, resolveErrorMessage } from './errorHandlerService'
 
 export class ApiRequestError extends Error {
   code: string
@@ -169,10 +169,16 @@ class ApiService {
                try {
                  const errorData = await response.json()
                  errorCode = errorData.error?.code || errorCode
-                 const err = { code: errorCode, status: response.status, response: { data: errorData } }
+                 const apiMessage = errorData.error?.message
+                 const err = {
+                   code: errorCode,
+                   status: response.status,
+                   apiMessage,
+                   response: { data: errorData },
+                 }
                  throw new ApiRequestError(
                    mapErrorCode(err),
-                   mapError(err),
+                   resolveErrorMessage(err),
                    response.status
                  )
                } catch (parseError) {

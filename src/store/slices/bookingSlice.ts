@@ -83,7 +83,7 @@ export const updateBookingStatus = createAsyncThunk(
 
 export const interveneBooking = createAsyncThunk(
   'bookings/interveneBooking',
-  async (data: { bookingId: string; action: 'reassign_driver' | 'cancel_booking' | 'update_fare' | 'send_notification'; reason?: string }, { rejectWithValue }) => {
+  async (data: { bookingId: string; action: 'cancel' | 'reassign'; reason?: string }, { rejectWithValue }) => {
     try {
       const response = await bookingService.interveneBooking(data.bookingId, data.action, data.reason || '')
       return { bookingId: data.bookingId, ...response }

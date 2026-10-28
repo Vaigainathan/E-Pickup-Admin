@@ -60,9 +60,10 @@ import {
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { bookingService } from '../services/bookingService'
+import { resolveErrorMessage } from '../services/errorHandlerService'
 import BookingInterventionDialog from '../components/BookingInterventionDialog'
 import AdminFetchState from '../components/AdminFetchState'
-import { Booking as BookingType } from '../types'
+import { Booking as ApiBooking } from '../types'
 
 // Modern Color Theme
 const theme = {
@@ -86,11 +87,14 @@ const theme = {
   shadowLarge: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
 }
 
-interface Booking {
+/** Normalized booking shape used across this page (list, dialogs, actions). */
+interface BookingViewModel {
   id: string
   displayId?: number // ✅ NEW: 5-digit unique display ID (Zomato-style order ID)
   customerId: string
   driverId?: string
+  sourceType?: ApiBooking['sourceType']
+  allowedAdminTransitions?: string[]
   pickupLocation: {
     address: string
     coordinates: { lat: number; lng: number }
@@ -99,7 +103,7 @@ interface Booking {
     address: string
     coordinates: { lat: number; lng: number }
   }
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'
+  status: string
   fare: number
   distance: number
   estimatedTime: number
@@ -171,6 +175,228 @@ interface Booking {
   }
 }
 
+type VerificationPhotoFields = NonNullable<BookingViewModel['pickupVerification']>
+
+type PhotoVerificationSource = Record<string, unknown> & {
+  originalData?: {
+    photoVerification?: {
+      pickup?: Record<string, unknown>
+      delivery?: Record<string, unknown>
+    }
+  }
+}
+
+function readFareAmount(booking: ApiBooking): number {
+  if (typeof booking.fare === 'number') {
+    return booking.fare
+  }
+  if (booking.fare && typeof booking.fare === 'object') {
+    return booking.fare.totalFare || booking.fare.baseFare || booking.fare.total || 0
+  }
+  if (typeof booking.totalFare === 'number') {
+    return booking.totalFare
+  }
+  if (typeof booking.pricing?.totalFare === 'number') {
+    return booking.pricing.totalFare
+  }
+  return 0
+}
+
+function fallbackVerificationPhoto(
+  primary?: Record<string, unknown>,
+  fallback?: Record<string, unknown>,
+): VerificationPhotoFields | undefined {
+  const candidate =
+    primary && typeof primary === 'object'
+      ? primary
+      : fallback && typeof fallback === 'object'
+        ? fallback
+        : null
+  if (!candidate) {
+    return undefined
+  }
+  const photoUrl =
+    (typeof candidate.photoUrl === 'string' && candidate.photoUrl.trim()) ||
+    (typeof candidate.photoURL === 'string' && candidate.photoURL.trim()) ||
+    (typeof candidate.url === 'string' && candidate.url.trim())
+  if (!photoUrl) {
+    return undefined
+  }
+  const metadata =
+    candidate.metadata && typeof candidate.metadata === 'object'
+      ? (candidate.metadata as Record<string, unknown>)
+      : undefined
+  const rawVerifiedAt =
+    candidate.verifiedAt || candidate.uploadedAt || metadata?.verifiedAt
+  let verifiedAt: string | undefined
+  if (rawVerifiedAt) {
+    if (typeof rawVerifiedAt === 'object' && rawVerifiedAt !== null && 'toDate' in rawVerifiedAt) {
+      const toDate = (rawVerifiedAt as { toDate?: () => Date }).toDate
+      if (typeof toDate === 'function') {
+        verifiedAt = toDate.call(rawVerifiedAt).toISOString()
+      }
+    } else if (rawVerifiedAt instanceof Date) {
+      verifiedAt = rawVerifiedAt.toISOString()
+    } else if (typeof rawVerifiedAt === 'string') {
+      const parsed = new Date(rawVerifiedAt)
+      verifiedAt = Number.isNaN(parsed.getTime()) ? rawVerifiedAt : parsed.toISOString()
+    }
+  }
+  const rawLocation = candidate.location || candidate.coordinates || metadata?.location
+  let location: { latitude: number; longitude: number } | undefined
+  if (rawLocation && typeof rawLocation === 'object') {
+    const loc = rawLocation as Record<string, unknown>
+    const coords = loc.coords && typeof loc.coords === 'object' ? (loc.coords as Record<string, unknown>) : undefined
+    const lat = loc.latitude ?? loc.lat ?? loc._latitude ?? coords?.latitude
+    const lng = loc.longitude ?? loc.lng ?? loc._longitude ?? coords?.longitude
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      location = { latitude: lat, longitude: lng }
+    }
+  }
+
+  return {
+    photoUrl: photoUrl.trim(),
+    verifiedAt,
+    verifiedBy:
+      (typeof candidate.verifiedBy === 'string' && candidate.verifiedBy) ||
+      (typeof candidate.uploadedBy === 'string' && candidate.uploadedBy) ||
+      (typeof candidate.reviewedBy === 'string' && candidate.reviewedBy) ||
+      '',
+    location,
+    notes:
+      (typeof candidate.notes === 'string' && candidate.notes) ||
+      (typeof candidate.note === 'string' && candidate.note) ||
+      (typeof candidate.description === 'string' && candidate.description) ||
+      (typeof metadata?.notes === 'string' && metadata.notes) ||
+      (typeof metadata?.note === 'string' && metadata.note) ||
+      undefined,
+  }
+}
+
+function defaultPickupLocation(): BookingViewModel['pickupLocation'] {
+  return { address: 'No pickup address', coordinates: { lat: 0, lng: 0 } }
+}
+
+function defaultDropoffLocation(): BookingViewModel['dropoffLocation'] {
+  return { address: 'No dropoff address', coordinates: { lat: 0, lng: 0 } }
+}
+
+function mapApiBookingToViewModel(booking: ApiBooking): BookingViewModel {
+  const extended = booking as ApiBooking & PhotoVerificationSource
+  const customerName =
+    booking.customerInfo?.name || booking.customerName || 'Unknown Customer'
+  const driverName = booking.driverInfo?.name || booking.driverName || 'No Driver Assigned'
+
+  const normalized: BookingViewModel = {
+    id: booking.id || `booking_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+    displayId: booking.displayId,
+    customerId: booking.customerId || '',
+    driverId: booking.driverId,
+    sourceType: booking.sourceType,
+    allowedAdminTransitions: booking.allowedAdminTransitions,
+    status: booking.status || 'unknown',
+    fare: readFareAmount(booking),
+    customerName,
+    driverName,
+    pickupLocation: booking.pickupLocation
+      ? {
+          address: booking.pickupLocation.address || 'No pickup address',
+          coordinates: {
+            lat: booking.pickupLocation.coordinates?.lat ?? booking.pickupLocation.latitude ?? 0,
+            lng: booking.pickupLocation.coordinates?.lng ?? booking.pickupLocation.longitude ?? 0,
+          },
+        }
+      : defaultPickupLocation(),
+    dropoffLocation: booking.dropoffLocation
+      ? {
+          address: booking.dropoffLocation.address || 'No dropoff address',
+          coordinates: {
+            lat: booking.dropoffLocation.coordinates?.lat ?? booking.dropoffLocation.latitude ?? 0,
+            lng: booking.dropoffLocation.coordinates?.lng ?? booking.dropoffLocation.longitude ?? 0,
+          },
+        }
+      : defaultDropoffLocation(),
+    paymentStatus: booking.paymentStatus || 'pending',
+    distance: typeof booking.distance === 'number' ? booking.distance : 0,
+    estimatedTime:
+      typeof booking.estimatedTime === 'number'
+        ? booking.estimatedTime
+        : typeof booking.estimatedDuration === 'number'
+          ? booking.estimatedDuration
+          : 0,
+    createdAt:
+      typeof booking.createdAt === 'string' ? booking.createdAt : new Date().toISOString(),
+    updatedAt:
+      typeof booking.updatedAt === 'string' ? booking.updatedAt : new Date().toISOString(),
+    driverVerified: booking.driverVerified ?? false,
+    senderInfo: {
+      name: booking.senderInfo?.name || booking.pickup?.name || 'Sender',
+      phone: booking.senderInfo?.phone || booking.pickup?.phone || '+91 9876543210',
+    },
+    recipientInfo: {
+      name: booking.recipientInfo?.name || booking.dropoff?.name || 'Recipient',
+      phone: booking.recipientInfo?.phone || booking.dropoff?.phone || '+91 9876543210',
+    },
+    pickupVerification: booking.pickupVerification as VerificationPhotoFields | undefined,
+    deliveryVerification: booking.deliveryVerification as VerificationPhotoFields | undefined,
+    packageDetails: booking.packageDetails,
+    cancellation: booking.cancellation,
+  }
+
+  if (!normalized.pickupVerification) {
+    normalized.pickupVerification = fallbackVerificationPhoto(
+      booking.pickupVerification as Record<string, unknown> | undefined,
+      extended.originalData?.photoVerification?.pickup,
+    )
+  }
+
+  if (!normalized.deliveryVerification) {
+    normalized.deliveryVerification = fallbackVerificationPhoto(
+      booking.deliveryVerification as Record<string, unknown> | undefined,
+      extended.originalData?.photoVerification?.delivery,
+    )
+  }
+
+  if (booking.status === 'cancelled' && booking.cancellation) {
+    normalized.cancellation = {
+      reason: booking.cancellation.reason || 'other',
+      reasonText: booking.cancellation.reasonText,
+      cancelledAt:
+        booking.cancellation.cancelledAt ||
+        (typeof booking.completedAt === 'string' ? booking.completedAt : new Date().toISOString()),
+      cancelledBy: booking.cancellation.cancelledBy || 'driver',
+      cancelledAtStage: booking.cancellation.cancelledAtStage,
+      evidencePhotos: booking.cancellation.evidencePhotos || [],
+    }
+  }
+
+  return normalized
+}
+
+function createFallbackViewModel(partial: Partial<ApiBooking>): BookingViewModel {
+  return mapApiBookingToViewModel({
+    id: partial.id || `booking_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+    customerId: partial.customerId || '',
+    status: partial.status || 'pending',
+    createdAt: partial.createdAt || new Date().toISOString(),
+    updatedAt: partial.updatedAt || new Date().toISOString(),
+    ...partial,
+  } as ApiBooking)
+}
+
+function viewModelForInterventionDialog(vm: BookingViewModel): ApiBooking {
+  return {
+    id: vm.id,
+    customerId: vm.customerId,
+    driverId: vm.driverId,
+    displayId: vm.displayId,
+    sourceType: vm.sourceType,
+    status: vm.status as ApiBooking['status'],
+    createdAt: vm.createdAt,
+    updatedAt: vm.updatedAt,
+  }
+}
+
 const isHttpUrl = (value?: string | null): boolean => {
   if (!value || typeof value !== 'string') {
     return false
@@ -178,7 +404,7 @@ const isHttpUrl = (value?: string | null): boolean => {
   return /^https?:\/\//i.test(value)
 }
 
-type VerificationPhoto = Booking['pickupVerification']
+type VerificationPhoto = BookingViewModel['pickupVerification']
 
 interface VerificationPhotoCardProps {
   title: string
@@ -352,8 +578,15 @@ const VerificationPhotoCard: React.FC<VerificationPhotoCardProps> = ({ title, ve
 }
 
 const ModernBookingManagement: React.FC = React.memo(() => {
-  // ✅ UNIFIED STATUS DEFINITION: Match backend exactly
+  // ✅ UNIFIED STATUS DEFINITION: Match backend exactly (parcel fallback when no allowedAdminTransitions)
   const statusOptions = ['pending', 'driver_assigned', 'accepted', 'driver_enroute', 'driver_arrived', 'picked_up', 'in_transit', 'delivered', 'completed', 'cancelled', 'rejected']
+
+  const showEditStatusInList = (booking: BookingViewModel): boolean => {
+    if (booking.sourceType === 'marketplace') {
+      return Array.isArray(booking.allowedAdminTransitions) && booking.allowedAdminTransitions.length > 0
+    }
+    return true
+  }
   
   const [isInitialized, setIsInitialized] = useState(false)
   // const [isLoading, setIsLoading] = useState(true)
@@ -362,21 +595,22 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   const [isConnected, setIsConnected] = useState(false)
 
   // Data states
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [activeBookings, setActiveBookings] = useState<Booking[]>([])
-  const [completedBookings, setCompletedBookings] = useState<Booking[]>([])
-  const [cancelledBookings, setCancelledBookings] = useState<Booking[]>([])
+  const [bookings, setBookings] = useState<BookingViewModel[]>([])
+  const [activeBookings, setActiveBookings] = useState<BookingViewModel[]>([])
+  const [completedBookings, setCompletedBookings] = useState<BookingViewModel[]>([])
+  const [cancelledBookings, setCancelledBookings] = useState<BookingViewModel[]>([])
 
   // Loading states
   const [bookingsLoading, setBookingsLoading] = useState(false)
 
   // Dialog states
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [selectedBooking, setSelectedBooking] = useState<BookingViewModel | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [interventionDialogOpen, setInterventionDialogOpen] = useState(false)
   const [newStatus, setNewStatus] = useState('')
+  const [statusTransitionOptions, setStatusTransitionOptions] = useState<string[] | null>(null)
   const [deleteReason, setDeleteReason] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
 
@@ -550,136 +784,14 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       })
       
       if (response.success && response.data) {
-        const bookingsData = response.data as any[]
-        
-        // Normalize and validate booking data
-        const normalizedBookings = bookingsData.map(booking => {
+        const bookingsData = Array.isArray(response.data) ? response.data : []
+
+        const normalizedBookings = bookingsData.map((item) => {
           try {
-            // Extract fare from the mapped data structure
-            let fareAmount = 0;
-            if (typeof booking.fare === 'number') {
-              fareAmount = booking.fare;
-            } else if (booking.fare && typeof booking.fare === 'object') {
-              // Handle the enhanced fare structure from fare calculation service
-              fareAmount = booking.fare.totalFare || booking.fare.baseFare || booking.fare.total || 0;
-            }
-            
-            // Extract customer name from customerInfo or fallback to pickup name
-            const customerName = booking.customerInfo?.name || booking.customerName || 'Unknown Customer';
-            
-            // Extract driver name from driverInfo or fallback
-            const driverName = booking.driverInfo?.name || booking.driverName || 'No Driver Assigned';
-            
-            const normalizedBooking: Booking = {
-              ...booking,
-              id: booking.id || `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              status: booking.status || 'unknown',
-              fare: fareAmount,
-              customerName: customerName,
-              driverName: driverName,
-              pickupLocation: booking.pickupLocation || { address: 'No pickup address', coordinates: { lat: 0, lng: 0 } },
-              dropoffLocation: booking.dropoffLocation || { address: 'No dropoff address', coordinates: { lat: 0, lng: 0 } },
-              paymentStatus: booking.paymentStatus || 'pending',
-              createdAt: booking.createdAt || new Date().toISOString(),
-              updatedAt: booking.updatedAt || new Date().toISOString(),
-              driverVerified: booking.driverVerified || false,
-              // Contact information
-              senderInfo: {
-                name: booking.senderInfo?.name || booking.pickup?.name || 'Sender',
-                phone: booking.senderInfo?.phone || booking.pickup?.phone || '+91 9876543210'
-              },
-              recipientInfo: {
-                name: booking.recipientInfo?.name || booking.dropoff?.name || 'Recipient',
-                phone: booking.recipientInfo?.phone || booking.dropoff?.phone || '+91 9876543210'
-              }
-            };
-
-            const fallbackVerification = (primary?: any, fallback?: any) => {
-              const candidate = primary && typeof primary === 'object'
-                ? primary
-                : (fallback && typeof fallback === 'object' ? fallback : null);
-              if (!candidate) return undefined;
-              const photoUrl = (typeof candidate.photoUrl === 'string' && candidate.photoUrl.trim()) ||
-                (typeof candidate.photoURL === 'string' && candidate.photoURL.trim()) ||
-                (typeof candidate.url === 'string' && candidate.url.trim());
-              if (!photoUrl) return undefined;
-              const rawVerifiedAt = candidate.verifiedAt || candidate.uploadedAt || candidate.metadata?.verifiedAt;
-              let verifiedAt: string | undefined;
-              if (rawVerifiedAt) {
-                if (typeof rawVerifiedAt.toDate === 'function') {
-                  verifiedAt = rawVerifiedAt.toDate().toISOString();
-                } else if (rawVerifiedAt instanceof Date) {
-                  verifiedAt = rawVerifiedAt.toISOString();
-                } else if (typeof rawVerifiedAt === 'string') {
-                  const parsed = new Date(rawVerifiedAt);
-                  verifiedAt = Number.isNaN(parsed.getTime()) ? rawVerifiedAt : parsed.toISOString();
-                }
-              }
-              const rawLocation = candidate.location || candidate.coordinates || candidate.metadata?.location;
-              let location: { latitude: number; longitude: number } | undefined;
-              if (rawLocation && typeof rawLocation === 'object') {
-                const lat = rawLocation.latitude ?? rawLocation.lat ?? rawLocation._latitude ?? rawLocation.coords?.latitude;
-                const lng = rawLocation.longitude ?? rawLocation.lng ?? rawLocation._longitude ?? rawLocation.coords?.longitude;
-                if (typeof lat === 'number' && typeof lng === 'number') {
-                  location = { latitude: lat, longitude: lng };
-                }
-              }
-
-              return {
-                photoUrl: photoUrl.trim(),
-                verifiedAt,
-                verifiedBy: candidate.verifiedBy || candidate.uploadedBy || candidate.reviewedBy || '',
-                location,
-                notes: candidate.notes || candidate.note || candidate.description || candidate.metadata?.notes || candidate.metadata?.note
-              };
-            };
-
-            if (!normalizedBooking.pickupVerification) {
-              normalizedBooking.pickupVerification = fallbackVerification(
-                booking.pickupVerification,
-                booking.originalData?.photoVerification?.pickup
-              ) as any;
-            }
-
-            if (!normalizedBooking.deliveryVerification) {
-              normalizedBooking.deliveryVerification = fallbackVerification(
-                booking.deliveryVerification,
-                booking.originalData?.photoVerification?.delivery
-              ) as any;
-            }
-
-            // ✅ NEW: Include cancellation data if booking is cancelled
-            if (booking.status === 'cancelled' && booking.cancellation) {
-              normalizedBooking.cancellation = {
-                reason: booking.cancellation.reason || 'other',
-                reasonText: booking.cancellation.reasonText,
-                cancelledAt: booking.cancellation.cancelledAt || booking.cancelledAt || new Date().toISOString(),
-                cancelledBy: booking.cancellation.cancelledBy || booking.cancelledBy || 'driver',
-                cancelledAtStage: booking.cancellation.cancelledAtStage,
-                evidencePhotos: booking.cancellation.evidencePhotos || []
-              };
-            }
-
-            return normalizedBooking;
+            return mapApiBookingToViewModel(item as ApiBooking)
           } catch (error) {
-            console.error('Error normalizing booking:', error, booking)
-            return {
-              id: `booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              customerId: booking?.customerId || '',
-              driverId: booking?.driverId,
-              status: 'pending',
-              fare: 0,
-              customerName: 'Unknown Customer',
-              driverName: 'No Driver Assigned',
-              pickupLocation: { address: 'No pickup address', coordinates: { lat: 0, lng: 0 } },
-              dropoffLocation: { address: 'No dropoff address', coordinates: { lat: 0, lng: 0 } },
-              paymentStatus: 'pending',
-              distance: typeof booking?.distance === 'number' ? booking.distance : 0,
-              estimatedTime: typeof booking?.estimatedTime === 'number' ? booking.estimatedTime : 0,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              driverVerified: false
-            } as Booking
+            console.error('Error normalizing booking:', error, item)
+            return createFallbackViewModel((item ?? {}) as Partial<ApiBooking>)
           }
         })
         
@@ -769,7 +881,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       setTimeout(() => fetchBookings({ offset: 0, append: false }), 500)
     } catch (error) {
       console.error('❌ Error updating booking status:', error)
-      addNotification('Failed to update booking status', 'error')
+      addNotification(resolveErrorMessage(error), 'error')
     } finally {
       setIsUpdating(false)
     }
@@ -970,8 +1082,8 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           bValue = b.customerName || ''
           break
         default:
-          aValue = a[sortBy as keyof Booking] || ''
-          bValue = b[sortBy as keyof Booking] || ''
+          aValue = a[sortBy as keyof BookingViewModel] || ''
+          bValue = b[sortBy as keyof BookingViewModel] || ''
       }
 
       if (sortOrder === 'asc') {
@@ -1087,6 +1199,34 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       setNotifications(prev => prev.filter(n => n.id !== notification.id))
     }, 5000)
   }, [])
+
+  const openStatusEditDialog = useCallback(async (booking: BookingViewModel) => {
+    setSelectedBooking(booking)
+    setNewStatus(booking.status)
+    setStatusTransitionOptions(null)
+    try {
+      setIsUpdating(true)
+      const full = mapApiBookingToViewModel(await bookingService.getBookingById(booking.id))
+      setSelectedBooking(full)
+      const transitions = full.allowedAdminTransitions
+      if (full.sourceType === 'marketplace' && (!transitions || transitions.length === 0)) {
+        addNotification(resolveErrorMessage({ code: 'USE_ORDER_ACTIONS' }), 'info')
+        return
+      }
+      setStatusTransitionOptions(transitions && transitions.length > 0 ? [...transitions] : null)
+      setNewStatus(full.status)
+      setStatusDialogOpen(true)
+    } catch (error) {
+      addNotification(resolveErrorMessage(error), 'error')
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [addNotification])
+
+  const statusOptionsForDialog = useMemo(
+    () => statusTransitionOptions ?? statusOptions,
+    [statusTransitionOptions, statusOptions],
+  )
 
   // Enhanced sorting
   const handleSort = useCallback((field: string) => {
@@ -2011,19 +2151,17 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                               <VisibilityIcon />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Edit Status">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedBooking(booking)
-                                setNewStatus(booking.status)
-                                setStatusDialogOpen(true)
-                              }}
-                              sx={{ color: theme.warning }}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
+                          {showEditStatusInList(booking) && (
+                            <Tooltip title="Edit Status">
+                              <IconButton
+                                size="small"
+                                onClick={() => openStatusEditDialog(booking)}
+                                sx={{ color: theme.warning }}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <Tooltip title="Delete Booking">
                             <IconButton
                               size="small"
@@ -2158,17 +2296,15 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                   >
                     View Details
                   </Button>
-                  <Button
-                    startIcon={<EditIcon />}
-                    onClick={() => {
-                      setSelectedBooking(booking)
-                      setNewStatus(booking.status)
-                      setStatusDialogOpen(true)
-                    }}
-                    sx={{ color: theme.warning }}
-                  >
-                    Edit Status
-                  </Button>
+                  {showEditStatusInList(booking) && (
+                    <Button
+                      startIcon={<EditIcon />}
+                      onClick={() => openStatusEditDialog(booking)}
+                      sx={{ color: theme.warning }}
+                    >
+                      Edit Status
+                    </Button>
+                  )}
                   <Button
                     startIcon={<DeleteIcon />}
                     onClick={() => {
@@ -2535,7 +2671,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       {/* Booking Intervention Dialog */}
       <BookingInterventionDialog
         open={interventionDialogOpen}
-        booking={selectedBooking as BookingType | null}
+        booking={selectedBooking ? viewModelForInterventionDialog(selectedBooking) : null}
         onClose={() => {
           setInterventionDialogOpen(false)
         }}
@@ -2549,7 +2685,10 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       {/* Status Update Dialog */}
       <Dialog
         open={statusDialogOpen}
-        onClose={() => setStatusDialogOpen(false)}
+        onClose={() => {
+          setStatusDialogOpen(false)
+          setStatusTransitionOptions(null)
+        }}
         maxWidth="sm"
         fullWidth
         fullScreen={isMobileDialog}
@@ -2571,7 +2710,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                 onChange={(e) => setNewStatus(e.target.value)}
                 margin="normal"
               >
-                {statusOptions.map((status) => (
+                {statusOptionsForDialog.map((status) => (
                   <MenuItem key={status} value={status}>
                     {(status || 'unknown').replace('_', ' ').toUpperCase()}
                   </MenuItem>

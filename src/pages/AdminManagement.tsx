@@ -28,10 +28,12 @@ import {
   CardContent,
   Avatar,
   useMediaQuery,
+  CircularProgress,
 } from '@mui/material'
 import {
   Add as AddIcon,
   Block as BlockIcon,
+  DeleteOutline as DeleteOutlineIcon,
   Person as PersonIcon,
   AdminPanelSettings as AdminIcon,
   Support as SupportIcon,
@@ -115,8 +117,24 @@ const AdminManagement: React.FC = () => {
     role: 'support' as AdminUser['role'],
     temporaryPassword: '',
   })
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [adminToDelete, setAdminToDelete] = useState<AdminUser | null>(null)
+  const [deleteInProgress, setDeleteInProgress] = useState(false)
 
   const { user: currentUser } = useSelector((state: RootState) => state.auth)
+
+  const activeSuperAdminCount = admins.filter(
+    (a) => a.role === 'super_admin' && a.isActive !== false
+  ).length
+
+  const isSuperAdminViewer = currentUser?.role === 'super_admin'
+
+  const canDeleteAdmin = (admin: AdminUser) => {
+    if (!isSuperAdminViewer) return false
+    if (admin.uid === currentUser?.uid) return false
+    if (admin.role === 'super_admin' && activeSuperAdminCount <= 1) return false
+    return true
+  }
 
   useEffect(() => {
     loadAdmins()
@@ -207,19 +225,45 @@ const AdminManagement: React.FC = () => {
     if (window.confirm(`Disable admin account for ${admin.displayName}?`)) {
       try {
         const putResponse = await apiService.put(`/api/admin/admins/${admin.uid}`, { isActive: false })
-        const response =
-          putResponse.success
-            ? putResponse
-            : await apiService.delete(`/api/admin/admins/${admin.uid}`)
 
-        if (response.success) {
+        if (putResponse.success) {
           loadAdmins()
         } else {
-          throw new Error(response.error?.message || 'Failed to disable admin')
+          throw new Error(putResponse.error?.message || 'Failed to disable admin')
         }
       } catch (err: any) {
         setError(errorHandlerService.handleError(err).message)
       }
+    }
+  }
+
+  const openDeleteDialog = (admin: AdminUser) => {
+    setAdminToDelete(admin)
+    setDeleteDialogOpen(true)
+  }
+
+  const closeDeleteDialog = () => {
+    if (deleteInProgress) return
+    setDeleteDialogOpen(false)
+    setAdminToDelete(null)
+  }
+
+  const handleConfirmDeleteAdmin = async () => {
+    if (!adminToDelete) return
+    setDeleteInProgress(true)
+    try {
+      const response = await apiService.delete(`/api/admin/admins/${adminToDelete.uid}`)
+      if (response.success) {
+        setDeleteDialogOpen(false)
+        setAdminToDelete(null)
+        loadAdmins()
+      } else {
+        setError(mapError({ code: response.error?.code, message: response.error?.message }))
+      }
+    } catch (err: unknown) {
+      setError(mapError(err))
+    } finally {
+      setDeleteInProgress(false)
     }
   }
 
@@ -363,6 +407,17 @@ const AdminManagement: React.FC = () => {
                                   >
                                     <BlockIcon fontSize="small" />
                                   </IconButton>
+                                  {isSuperAdminViewer && (
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => openDeleteDialog(admin)}
+                                      disabled={!canDeleteAdmin(admin) || deleteInProgress}
+                                      color="error"
+                                      title="Delete admin"
+                                    >
+                                      <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                  )}
                                 </Box>
                               </Box>
                               <Box display="flex" flexWrap="wrap" gap={1} mt={1}>
@@ -449,18 +504,30 @@ const AdminManagement: React.FC = () => {
                                 />
                               </TableCell>
                               <TableCell>
-                                <IconButton
-                                  onClick={() => handleDisableAdmin(admin)}
-                                  disabled={
-                                    currentUser?.role !== 'super_admin' ||
-                                    admin.uid === currentUser?.uid ||
-                                    admin.isActive === false
-                                  }
-                                  color="error"
-                                  title="Disable admin"
-                                >
-                                  <BlockIcon />
-                                </IconButton>
+                                <Box display="flex" alignItems="center" gap={0.5}>
+                                  <IconButton
+                                    onClick={() => handleDisableAdmin(admin)}
+                                    disabled={
+                                      currentUser?.role !== 'super_admin' ||
+                                      admin.uid === currentUser?.uid ||
+                                      admin.isActive === false
+                                    }
+                                    color="error"
+                                    title="Disable admin"
+                                  >
+                                    <BlockIcon />
+                                  </IconButton>
+                                  {isSuperAdminViewer && (
+                                    <IconButton
+                                      onClick={() => openDeleteDialog(admin)}
+                                      disabled={!canDeleteAdmin(admin) || deleteInProgress}
+                                      color="error"
+                                      title="Delete admin"
+                                    >
+                                      <DeleteOutlineIcon />
+                                    </IconButton>
+                                  )}
+                                </Box>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -531,6 +598,32 @@ const AdminManagement: React.FC = () => {
               }
             >
               Create
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog} maxWidth="xs" fullWidth>
+          <DialogTitle>Delete admin account?</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2">
+              This permanently removes{' '}
+              <Typography component="span" fontWeight={600}>
+                {adminToDelete?.email}
+              </Typography>
+              . This cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeDeleteDialog} disabled={deleteInProgress}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmDeleteAdmin}
+              variant="contained"
+              color="error"
+              disabled={deleteInProgress}
+            >
+              {deleteInProgress ? <CircularProgress size={22} aria-hidden="true" /> : 'Delete'}
             </Button>
           </DialogActions>
         </Dialog>

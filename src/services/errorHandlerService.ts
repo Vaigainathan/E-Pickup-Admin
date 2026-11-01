@@ -70,6 +70,21 @@ class ErrorHandlerService {
       retryable: false,
       action: 'Contact a super admin'
     },
+    'CANNOT_DELETE_SELF': {
+      code: 'CANNOT_DELETE_SELF',
+      message: 'You cannot delete your own admin account.',
+      severity: 'error',
+      retryable: false,
+      action: 'Ask another super admin to manage your account'
+    },
+    'LAST_SUPER_ADMIN': {
+      code: 'LAST_SUPER_ADMIN',
+      message:
+        'At least one super admin must remain. Disable the account instead, or promote another admin first.',
+      severity: 'error',
+      retryable: false,
+      action: 'Promote another admin or disable instead of delete'
+    },
 
     // Network errors
     'NETWORK_ERROR': {

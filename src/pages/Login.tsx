@@ -119,43 +119,57 @@ const Login: React.FC = () => {
     },
   }
 
-  const stagingBadge = isStagingEnv ? (
-    <Chip
-      label="ePickup Admin — staging"
-      size="small"
-      color="warning"
-      sx={{
-        mt: 2,
-        fontWeight: 600,
-        color: 'warning.contrastText',
-      }}
-      aria-label="Staging environment"
-    />
-  ) : null
+  const stagingBadge = (sx?: object) =>
+    isStagingEnv ? (
+      <Chip
+        label="ePickup Admin — staging"
+        size="small"
+        color="warning"
+        sx={{
+          mt: 1.5,
+          fontWeight: 600,
+          color: 'warning.contrastText',
+          ...sx,
+        }}
+        aria-label="Staging environment"
+      />
+    ) : null
 
   const loginForm = (
     <Paper
       elevation={0}
       sx={{
-        p: 4,
         borderRadius: 3,
         border: `1px solid ${AdminColors.border.light}`,
         width: '100%',
         maxWidth: 420,
+        overflow: 'hidden',
+        p: 0,
       }}
     >
       {!isDesktop && (
-        <Box textAlign="center" mb={3}>
+        <Box
+          sx={{
+            width: '100%',
+            backgroundColor: AdminColors.primary,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            py: 3,
+            px: 2,
+          }}
+        >
           <Box
             component="img"
             src="/epickup-logo.png"
             alt="ePickup"
-            sx={{ width: 140, maxWidth: '80%', height: 'auto', objectFit: 'contain' }}
+            sx={{ width: 140, maxWidth: '80%', height: 'auto', objectFit: 'contain', display: 'block' }}
           />
-          {stagingBadge}
+          {stagingBadge()}
         </Box>
       )}
 
+      <Box sx={{ p: 4 }}>
       <Typography variant="h5" component="h1" fontWeight={600} gutterBottom>
         Sign in
       </Typography>
@@ -238,6 +252,7 @@ const Login: React.FC = () => {
           Admin Access Only
         </Typography>
       </Divider>
+      </Box>
     </Paper>
   )
 
@@ -280,7 +295,7 @@ const Login: React.FC = () => {
             <Typography variant="body1" sx={{ mt: 3, color: 'rgba(255,255,255,0.75)' }}>
               Admin portal
             </Typography>
-            {stagingBadge}
+            {stagingBadge({ mt: 2 })}
           </Box>
         </Box>
       )}

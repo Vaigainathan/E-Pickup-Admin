@@ -250,6 +250,11 @@ const AdminManagement: React.FC = () => {
 
   const handleConfirmDeleteAdmin = async () => {
     if (!adminToDelete) return
+    if (!canDeleteAdmin(adminToDelete)) {
+      setDeleteDialogOpen(false)
+      setAdminToDelete(null)
+      return
+    }
     setDeleteInProgress(true)
     try {
       const response = await apiService.delete(`/api/admin/admins/${adminToDelete.uid}`)
@@ -299,7 +304,7 @@ const AdminManagement: React.FC = () => {
           </Button>
         </Box>
 
-        {error && admins.length > 0 && (
+        {error && (
           <Alert
             severity="error"
             sx={{ mb: 3 }}

@@ -294,6 +294,13 @@ export interface Booking {
   }>
   /** When present (GET booking), admin may only set these statuses */
   allowedAdminTransitions?: string[]
+  /** Optional; present when backend includes status history on GET booking */
+  statusUpdates?: Array<{
+    status: string
+    notes?: string | null
+    timestamp?: string
+    updatedAt?: string
+  }>
 }
 
 export interface VerificationDetail {

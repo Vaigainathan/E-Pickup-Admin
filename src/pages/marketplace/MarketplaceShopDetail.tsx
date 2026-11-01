@@ -33,7 +33,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import AdminFetchState from '../../components/AdminFetchState'
 import { SHOP_REJECT_SECTIONS, SHOP_EARNINGS_PERIODS } from '../../constants/marketplace'
-import { isSuperAdmin } from '../../config/roleAccess'
+import { isSuperAdmin, canViewMoneyAndPayoutFields } from '../../config/roleAccess'
 import { RootState } from '../../store'
 import { shopAdminService } from '../../services/shopAdminService'
 import { mapError } from '../../services/errorHandlerService'
@@ -42,6 +42,7 @@ import { formatIst, maskUpiId } from '../../utils/marketplaceDisplay'
 import { marketplaceAdminService } from '../../services/marketplaceAdminService'
 import { ApiRequestError } from '../../services/apiService'
 import { formatInrCurrency } from '../../utils/formatInrCurrency'
+import { isQuietForbiddenError } from '../../utils/quietForbiddenError'
 
 function DocumentViewButton({ label, href }: { label: string; href?: string | null }) {
   if (!href) {
@@ -72,6 +73,7 @@ const MarketplaceShopDetail: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useSelector((state: RootState) => state.auth)
   const canMutate = isSuperAdmin(user?.role)
+  const canViewBankAndPayout = canViewMoneyAndPayoutFields(user?.role)
 
   const [shop, setShop] = useState<ShopDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -108,8 +110,11 @@ const MarketplaceShopDetail: React.FC = () => {
       setEarningsLoading(true)
       setShopEarnings(await marketplaceAdminService.getShopEarnings(shopId))
     } catch (err: unknown) {
+      if (isQuietForbiddenError(err, user?.role)) {
+        setShopEarnings(null)
+        return
+      }
       if (err instanceof ApiRequestError && err.status === 403) {
-        console.warn('Shop earnings detail forbidden')
         setShopEarnings(null)
         return
       }
@@ -118,7 +123,7 @@ const MarketplaceShopDetail: React.FC = () => {
     } finally {
       setEarningsLoading(false)
     }
-  }, [shopId, canMutate])
+  }, [shopId, canMutate, user?.role])
 
   useEffect(() => {
     loadShopEarnings()
@@ -204,6 +209,8 @@ const MarketplaceShopDetail: React.FC = () => {
 
   const registeredNameDisplay = shopEnteredUpiName || '—'
 
+  const pushRegistered = shop?.pushRegistered === true
+
   return (
     <Box sx={{ p: 3 }}>
       <Button sx={{ mb: 2 }} onClick={() => navigate('/marketplace/shops')}>← Back to shops</Button>
@@ -238,9 +245,19 @@ const MarketplaceShopDetail: React.FC = () => {
                     <DetailRow label="Owner name" value={userRecord?.name} />
                     <DetailRow label="Phone" value={userRecord?.phone} />
                     <DetailRow label="Email" value={userRecord?.email} />
+                    <DetailRow
+                      label="Push notifications"
+                      value={pushRegistered ? 'Registered' : 'Not registered'}
+                    />
+                    {!pushRegistered && (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                        Ask the shop to open the app and allow notifications.
+                      </Typography>
+                    )}
                   </CardContent>
                 </Card>
               </Grid>
+              {canViewBankAndPayout && (
               <Grid item xs={12} md={6}>
                 <Card>
                   <CardContent>
@@ -259,6 +276,7 @@ const MarketplaceShopDetail: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
+              )}
               <Grid item xs={12} md={6}>
                 <Card>
                   <CardContent>

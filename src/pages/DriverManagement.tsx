@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import { useSelector } from 'react-redux'
 import {
   Box,
   Typography,
@@ -95,6 +96,8 @@ import { apiService } from '../services/apiService'
 import { AdminColors } from '../constants/Colors'
 import AdminFetchState from '../components/AdminFetchState'
 import DriverWalletView from '../components/DriverWalletView'
+import { RootState } from '../store'
+import { canViewMoneyAndPayoutFields } from '../config/roleAccess'
 
 interface Driver {
   id: string
@@ -365,6 +368,9 @@ const getVerificationStatus = (driver: any) => {
 }
 
 const ModernDriverManagement: React.FC = React.memo(() => {
+  const authUser = useSelector((state: RootState) => state.auth.user)
+  const canViewMoney = canViewMoneyAndPayoutFields(authUser?.role)
+
   // const navigate = useNavigate() // Removed unused variable
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -1354,6 +1360,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
           </Box>
 
           {/* Footer with Earnings and Documents */}
+          {canViewMoney && (
           <Box 
             sx={{ 
               mt: 'auto',
@@ -1392,6 +1399,14 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               Total Earnings
             </Typography>
           </Box>
+          )}
+          {!canViewMoney && (
+          <Box sx={{ mt: 'auto', pt: 2, borderTop: '1px solid rgba(0, 0, 0, 0.08)' }}>
+            <Typography variant="caption" color="textSecondary">
+              {getDocumentStatus(driver.documents)}
+            </Typography>
+          </Box>
+          )}
         </CardContent>
       </Card>
     </Zoom>
@@ -2377,10 +2392,10 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                       <TableCell>Documents</TableCell>
                       <TableCell>Rating</TableCell>
                       <TableCell>Trips</TableCell>
-                      <TableCell>Wallet Balance</TableCell>
-                      <TableCell>Total Earnings</TableCell>
-                      <TableCell>Commission</TableCell>
-                      <TableCell>Net Earnings</TableCell>
+                      {canViewMoney && <TableCell>Wallet Balance</TableCell>}
+                      {canViewMoney && <TableCell>Total Earnings</TableCell>}
+                      {canViewMoney && <TableCell>Commission</TableCell>}
+                      {canViewMoney && <TableCell>Net Earnings</TableCell>}
                       <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2440,6 +2455,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                             {driver.totalTrips || 0}
                           </Typography>
                         </TableCell>
+                        {canViewMoney && (
                         <TableCell>
                           {(() => {
                             const walletBalance = driver.wallet?.balance ?? 0
@@ -2459,16 +2475,22 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                             )
                           })()}
                         </TableCell>
+                        )}
+                        {canViewMoney && (
                         <TableCell>
                           <Typography variant="body2" fontWeight="600">
                             {formatEarnings(driver.earnings?.total || 0)}
                           </Typography>
                         </TableCell>
+                        )}
+                        {canViewMoney && (
                         <TableCell>
                           <Typography variant="body2" color="error" fontWeight="600">
                             {formatEarnings(driver.earnings?.commission ?? driver.wallet?.totalSpent ?? 0)}
                           </Typography>
                         </TableCell>
+                        )}
+                        {canViewMoney && (
                         <TableCell>
                           <Typography variant="body2" color="success.main" fontWeight="600">
                             {formatEarnings(
@@ -2481,6 +2503,7 @@ const ModernDriverManagement: React.FC = React.memo(() => {
                             )}
                           </Typography>
                         </TableCell>
+                        )}
                     <TableCell>
                       <Tooltip title="Actions" arrow>
                         <IconButton
@@ -2760,10 +2783,13 @@ const ModernDriverManagement: React.FC = React.memo(() => {
               </Grid>
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
+                {canViewMoney && (
                 <DriverWalletView 
                   driverId={selectedDriver.id || selectedDriver.uid || selectedDriver.driverId || ''}
                   driverName={selectedDriver.personalInfo?.name || selectedDriver.name}
+                  role={authUser?.role}
                 />
+                )}
               </Grid>
             </Grid>
               )}

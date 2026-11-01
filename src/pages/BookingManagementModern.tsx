@@ -61,12 +61,19 @@ import {
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { bookingService } from '../services/bookingService'
+import { ApiRequestError } from '../services/apiService'
 import { resolveErrorMessage } from '../services/errorHandlerService'
 import BookingInterventionDialog from '../components/BookingInterventionDialog'
 import AdminFetchState from '../components/AdminFetchState'
 import { Booking as ApiBooking } from '../types'
 import { RootState } from '../store'
 import { isSuperAdmin } from '../config/roleAccess'
+import { isBookingDeletable } from '../constants/bookingStatuses'
+import {
+  formatBookingStatusLabel,
+  formatBookingTimelineTime,
+  lastDriverArrivedNote,
+} from '../utils/bookingDisplay'
 
 // Modern Color Theme
 const theme = {
@@ -176,6 +183,12 @@ interface BookingViewModel {
     }
     notes?: string
   }
+  statusUpdates?: Array<{
+    status: string
+    notes?: string | null
+    timestamp?: string
+    updatedAt?: string
+  }>
 }
 
 type VerificationPhotoFields = NonNullable<BookingViewModel['pickupVerification']>
@@ -344,6 +357,7 @@ function mapApiBookingToViewModel(booking: ApiBooking): BookingViewModel {
     deliveryVerification: booking.deliveryVerification as VerificationPhotoFields | undefined,
     packageDetails: booking.packageDetails,
     cancellation: booking.cancellation,
+    statusUpdates: Array.isArray(booking.statusUpdates) ? booking.statusUpdates : undefined,
   }
 
   if (!normalized.pickupVerification) {
@@ -638,7 +652,13 @@ const ModernBookingManagement: React.FC = React.memo(() => {
   const [newStatus, setNewStatus] = useState('')
   const [statusTransitionOptions, setStatusTransitionOptions] = useState<string[] | null>(null)
   const [deleteReason, setDeleteReason] = useState('')
+  const [deleteBlockedActive, setDeleteBlockedActive] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+
+  const canShowDeleteBooking = useCallback(
+    (booking: BookingViewModel) => privilegedAdmin && isBookingDeletable(booking.status),
+    [privilegedAdmin],
+  )
 
   // Enhanced UI states
   const [searchQuery, setSearchQuery] = useState('')
@@ -935,6 +955,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       setDeleteDialogOpen(false)
       setSelectedBooking(null)
       setDeleteReason('')
+      setDeleteBlockedActive(false)
       
       addNotification('Booking deleted successfully', 'success')
       console.log('✅ Booking deleted successfully')
@@ -943,7 +964,15 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       setTimeout(() => fetchBookings({ offset: 0, append: false }), 500)
     } catch (error) {
       console.error('❌ Error deleting booking:', error)
-      addNotification('Failed to delete booking', 'error')
+      if (
+        error instanceof ApiRequestError &&
+        error.code === 'BOOKING_ACTIVE' &&
+        error.status === 409
+      ) {
+        setDeleteBlockedActive(true)
+        return
+      }
+      addNotification(resolveErrorMessage(error), 'error')
     } finally {
       setIsUpdating(false)
     }
@@ -1224,6 +1253,17 @@ const ModernBookingManagement: React.FC = React.memo(() => {
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== notification.id))
     }, 5000)
+  }, [])
+
+  const openViewBookingDialog = useCallback(async (booking: BookingViewModel) => {
+    setSelectedBooking(booking)
+    setViewDialogOpen(true)
+    try {
+      const full = mapApiBookingToViewModel(await bookingService.getBookingById(booking.id))
+      setSelectedBooking(full)
+    } catch (error) {
+      console.error('❌ Error loading booking detail:', error)
+    }
   }, [])
 
   const openStatusEditDialog = useCallback(async (booking: BookingViewModel) => {
@@ -2116,8 +2156,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                                     cursor: 'pointer'
                                   }}
                                   onClick={() => {
-                                    setSelectedBooking(booking)
-                                    setViewDialogOpen(true)
+                                    openViewBookingDialog(booking)
                                   }}
                                 />
                                 {booking.cancellation.evidencePhotos.length > 1 && (
@@ -2172,10 +2211,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                           <Tooltip title="View Details">
                             <IconButton
                               size="small"
-                              onClick={() => {
-                                setSelectedBooking(booking)
-                                setViewDialogOpen(true)
-                              }}
+                              onClick={() => openViewBookingDialog(booking)}
                               sx={{ color: theme.primary }}
                             >
                               <VisibilityIcon />
@@ -2192,10 +2228,12 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                               </IconButton>
                             </Tooltip>
                           )}
+                          {canShowDeleteBooking(booking) && (
                           <Tooltip title="Delete Booking">
                             <IconButton
                               size="small"
                               onClick={() => {
+                                setDeleteBlockedActive(false)
                                 setSelectedBooking(booking)
                                 setDeleteDialogOpen(true)
                               }}
@@ -2204,6 +2242,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                               <DeleteIcon />
                             </IconButton>
                           </Tooltip>
+                          )}
                         </Box>
                       </TableCell>
                     )}
@@ -2318,10 +2357,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                 <CardActions>
                   <Button
                     startIcon={<VisibilityIcon />}
-                    onClick={() => {
-                      setSelectedBooking(booking)
-                      setViewDialogOpen(true)
-                    }}
+                    onClick={() => openViewBookingDialog(booking)}
                     sx={{ color: theme.primary }}
                   >
                     View Details
@@ -2335,9 +2371,11 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                       Edit Status
                     </Button>
                   )}
+                  {canShowDeleteBooking(booking) && (
                   <Button
                     startIcon={<DeleteIcon />}
                     onClick={() => {
+                      setDeleteBlockedActive(false)
                       setSelectedBooking(booking)
                       setDeleteDialogOpen(true)
                     }}
@@ -2345,6 +2383,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                   >
                     Delete
                   </Button>
+                  )}
                 </CardActions>
               </Card>
             </Grid>
@@ -2619,6 +2658,40 @@ const ModernBookingManagement: React.FC = React.memo(() => {
 
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom color={theme.primary}>
+                  Status timeline
+                </Typography>
+                {selectedBooking.statusUpdates && selectedBooking.statusUpdates.length > 0 ? (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Time</TableCell>
+                          <TableCell>Status</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {selectedBooking.statusUpdates.map((entry, index) => (
+                          <TableRow key={`${entry.timestamp ?? entry.updatedAt ?? index}-${entry.status}`}>
+                            <TableCell>
+                              {formatBookingTimelineTime(entry.timestamp ?? entry.updatedAt)}
+                            </TableCell>
+                            <TableCell>
+                              {formatBookingStatusLabel(entry.status, entry.notes)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Typography variant="body2" color={theme.text.secondary}>
+                    No status history
+                  </Typography>
+                )}
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom color={theme.primary}>
                   Booking Information
                 </Typography>
                 <Grid container spacing={2}>
@@ -2628,7 +2701,10 @@ const ModernBookingManagement: React.FC = React.memo(() => {
                         Status
                       </Typography>
                       <Chip
-                        label={(selectedBooking.status || 'unknown').replace('_', ' ')}
+                        label={formatBookingStatusLabel(
+                          selectedBooking.status || 'unknown',
+                          lastDriverArrivedNote(selectedBooking.statusUpdates),
+                        )}
                         sx={{
                           background: getStatusColor(selectedBooking.status || 'unknown'),
                           color: 'white',
@@ -2769,7 +2845,13 @@ const ModernBookingManagement: React.FC = React.memo(() => {
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteDialogOpen}
-        onClose={() => !isUpdating && setDeleteDialogOpen(false)}
+        onClose={() => {
+          if (!isUpdating) {
+            setDeleteDialogOpen(false)
+            setDeleteBlockedActive(false)
+            setDeleteReason('')
+          }
+        }}
         maxWidth="sm"
         fullWidth
         fullScreen={isMobileDialog}
@@ -2780,6 +2862,29 @@ const ModernBookingManagement: React.FC = React.memo(() => {
         <DialogContent sx={{ p: 3 }}>
           {selectedBooking && (
             <Box>
+              {deleteBlockedActive && (
+                <Alert
+                  severity="warning"
+                  sx={{ mb: 2 }}
+                  action={
+                    privilegedAdmin ? (
+                      <Button
+                        color="inherit"
+                        size="small"
+                        onClick={() => {
+                          setDeleteDialogOpen(false)
+                          setDeleteBlockedActive(false)
+                          setInterventionDialogOpen(true)
+                        }}
+                      >
+                        Intervene
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  This booking is still active — cancel or reassign it instead
+                </Alert>
+              )}
               <Alert severity="warning" sx={{ mb: 2 }}>
                 <AlertTitle>Warning</AlertTitle>
                 This action cannot be undone. The booking will be permanently deleted.
@@ -2808,6 +2913,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
             onClick={() => {
               setDeleteDialogOpen(false)
               setDeleteReason('')
+              setDeleteBlockedActive(false)
             }}
             disabled={isUpdating}
           >
@@ -2816,7 +2922,7 @@ const ModernBookingManagement: React.FC = React.memo(() => {
           <Button 
             variant="contained" 
             onClick={handleDeleteBooking}
-            disabled={isUpdating}
+            disabled={isUpdating || deleteBlockedActive}
             sx={{ background: theme.error, '&:hover': { background: theme.error + 'dd' } }}
           >
             {isUpdating ? 'Deleting...' : 'Delete Booking'}

@@ -24,10 +24,12 @@ import {
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { AdminColors } from '../constants/Colors'
+import { isQuietForbiddenError, isQuietForbiddenResponse } from '../utils/quietForbiddenError'
 
 interface DriverWalletViewProps {
   driverId: string
   driverName?: string
+  role?: string | null
 }
 
 interface WalletData {
@@ -50,7 +52,7 @@ interface WalletData {
   }
 }
 
-const DriverWalletView: React.FC<DriverWalletViewProps> = ({ driverId, driverName }) => {
+const DriverWalletView: React.FC<DriverWalletViewProps> = ({ driverId, driverName, role }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [walletData, setWalletData] = useState<WalletData | null>(null)
@@ -64,12 +66,20 @@ const DriverWalletView: React.FC<DriverWalletViewProps> = ({ driverId, driverNam
       
       if (response.success && response.data) {
         setWalletData(response.data)
+      } else if (isQuietForbiddenResponse(role, response.error?.code, 403)) {
+        setWalletData(null)
+        setError(null)
       } else {
         setError(response.error?.message || 'Failed to load wallet data')
       }
     } catch (err) {
       console.error('Error loading wallet data:', err)
-      setError('Failed to load wallet data')
+      if (isQuietForbiddenError(err, role)) {
+        setWalletData(null)
+        setError(null)
+      } else {
+        setError('Failed to load wallet data')
+      }
     } finally {
       setLoading(false)
     }
@@ -127,7 +137,7 @@ const DriverWalletView: React.FC<DriverWalletViewProps> = ({ driverId, driverNam
   }
 
   if (!walletData) {
-    return <Alert severity="info">No wallet data available</Alert>
+    return null
   }
 
   return (

@@ -26,10 +26,13 @@ import {
 } from '@mui/icons-material'
 import { comprehensiveAdminService } from '../services/comprehensiveAdminService'
 import { AdminColors } from '../constants/Colors'
+import { isQuietForbiddenError, isQuietForbiddenResponse } from '../utils/quietForbiddenError'
+import { ApiRequestError } from '../services/apiService'
 
 interface DriverEarningsViewProps {
   driverId: string
   driverName?: string
+  role?: string | null
 }
 
 interface EarningsData {
@@ -46,7 +49,7 @@ interface EarningsData {
   }>
 }
 
-const DriverEarningsView: React.FC<DriverEarningsViewProps> = ({ driverId, driverName }) => {
+const DriverEarningsView: React.FC<DriverEarningsViewProps> = ({ driverId, driverName, role }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [earningsData, setEarningsData] = useState<EarningsData | null>(null)
@@ -68,12 +71,20 @@ const DriverEarningsView: React.FC<DriverEarningsViewProps> = ({ driverId, drive
       
       if (response.success && response.data) {
         setEarningsData(response.data)
+      } else if (isQuietForbiddenResponse(role, response.error?.code, 403)) {
+        setEarningsData(null)
+        setError(null)
       } else {
         setError(response.error?.message || 'Failed to load earnings data')
       }
     } catch (err) {
       console.error('Error loading earnings data:', err)
-      setError('Failed to load earnings data')
+      if (isQuietForbiddenError(err, role) || (err instanceof ApiRequestError && err.status === 403)) {
+        setEarningsData(null)
+        setError(null)
+      } else {
+        setError('Failed to load earnings data')
+      }
     } finally {
       setLoading(false)
     }

@@ -12,6 +12,11 @@ export function isSuperAdmin(role: AdminRole | string | undefined | null): boole
   return role === 'super_admin'
 }
 
+/** Wallet, earnings, commission, shop bank/UPI — super_admin only (A-SEC-1 UI). */
+export function canViewMoneyAndPayoutFields(role: AdminRole | string | undefined | null): boolean {
+  return isSuperAdmin(role)
+}
+
 export function canAccessRoute(role: AdminRole | string | undefined | null, path: string): boolean {
   if (!role) return false
   if (isSuperAdmin(role)) return true

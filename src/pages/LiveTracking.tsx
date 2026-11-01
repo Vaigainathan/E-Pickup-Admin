@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import {
   Box,
   Typography,
@@ -31,6 +32,8 @@ import {
 import LiveTrackingMap from '../components/LiveTrackingMap';
 import { liveTrackingService } from '../services/liveTrackingService';
 import AdminFetchState from '../components/AdminFetchState';
+import { RootState } from '../store';
+import { isSuperAdmin } from '../config/roleAccess';
 
 interface Booking {
   id: string;
@@ -94,6 +97,9 @@ const transformDriverData = (apiDriver: any): Driver => {
 };
 
 const LiveTracking: React.FC = () => {
+  const authUser = useSelector((state: RootState) => state.auth.user)
+  const canSimulate = isSuperAdmin(authUser?.role)
+
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -267,6 +273,8 @@ const LiveTracking: React.FC = () => {
                 Live Tracking Map
               </Typography>
               <Box display="flex" gap={1} mb={2}>
+                {canSimulate && (
+                <>
                 <Button
                   variant="outlined"
                   size="small"
@@ -283,6 +291,8 @@ const LiveTracking: React.FC = () => {
                 >
                   Simulate Location
                 </Button>
+                </>
+                )}
               </Box>
               <LiveTrackingMap
                 onBookingSelect={handleBookingSelect}

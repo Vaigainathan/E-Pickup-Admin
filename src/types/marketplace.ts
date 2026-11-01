@@ -36,6 +36,8 @@ export interface ShopOnboardingStatus {
 
 export interface ShopDetail {
   shopId: string
+  pushRegistered?: boolean
+  pushMissing?: boolean
   user?: Record<string, unknown>
   profile?: Record<string, unknown>
   upiVerified?: boolean

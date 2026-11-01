@@ -219,6 +219,12 @@ class ErrorHandlerService {
       severity: 'error',
       retryable: true,
     },
+    'BOOKING_ACTIVE': {
+      code: 'BOOKING_ACTIVE',
+      message: 'This booking is still active — cancel or reassign it instead.',
+      severity: 'warning',
+      retryable: false,
+    },
     'CANCEL_ORDER_ERROR': {
       code: 'CANCEL_ORDER_ERROR',
       message: 'Could not cancel this marketplace order.',
